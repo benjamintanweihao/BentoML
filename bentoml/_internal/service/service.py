@@ -17,6 +17,10 @@ from ..io_descriptors import IODescriptor
 
 if TYPE_CHECKING:
     import grpc
+    from google.protobuf.descriptor import ServiceDescriptor
+
+    from bentoml.grpc.types import AddServicerFn
+    from bentoml.grpc.types import ServicerClass
 
     from .. import external_typing as ext
     from ..bento import Bento
@@ -81,6 +85,7 @@ class Service:
     runners: t.List[Runner]
     models: t.List[Model]
 
+    # starlette related
     mount_apps: t.List[t.Tuple[ext.ASGIApp, str, str]] = attr.field(
         init=False, factory=list
     )
@@ -89,11 +94,15 @@ class Service:
     ] = attr.field(init=False, factory=list)
 
     # gRPC related
+    mount_servicers: list[
+        tuple[ServicerClass, AddServicerFn, list[ServiceDescriptor]]
+    ] = attr.field(init=False, factory=list)
     interceptors: list[t.Type[grpc.aio.ServerInterceptor]] = attr.field(
         init=False, factory=list
     )
     grpc_handlers: list[grpc.GenericRpcHandler] = attr.field(init=False, factory=list)
 
+    # list of APIs from @svc.api
     apis: t.Dict[str, InferenceAPI] = attr.field(init=False, factory=dict)
 
     # Tag/Bento are only set when the service was loaded from a bento
@@ -216,7 +225,7 @@ class Service:
 
     @property
     def asgi_app(self) -> "ext.ASGIApp":
-        from ..server.http_app import ServiceAppFactory
+        from ..server.http_app import HTTPAppFactory
 
         return HTTPAppFactory(self)()
 
@@ -237,6 +246,14 @@ class Service:
         self, middleware_cls: t.Type[ext.AsgiMiddleware], **options: t.Any
     ) -> None:
         self.middlewares.append((middleware_cls, options))
+
+    def mount_grpc_servicer(
+        self,
+        servicer_cls: ServicerClass,
+        add_servicer_fn: AddServicerFn,
+        service_descriptor: list[ServiceDescriptor],
+    ) -> None:
+        self.mount_servicers.append((servicer_cls, add_servicer_fn, service_descriptor))
 
     def add_grpc_interceptor(
         self, interceptor_cls: t.Type[grpc.aio.ServerInterceptor]
