@@ -5,12 +5,13 @@ include bentoml/grpc/**/*.pyi
 # Files to exclude in PyPI distribution
 exclude CONTRIBUTING.md GOVERNANCE.md CODE_OF_CONDUCT.md DEVELOPMENT.md SECURITY.md
 exclude Makefile MANIFEST.in
-exclude *.yml
+exclude *.yml *.yaml
 exclude .git*
 exclude bentoml/grpc/buf.yaml
 exclude bentoml/_internal/frameworks/FRAMEWORK_TEMPLATE_PY
 
 # Directories to exclude in PyPI package
+prune .devcontainer
 prune requirements
 prune tests
 prune typings

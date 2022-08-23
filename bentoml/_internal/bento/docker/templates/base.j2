@@ -66,7 +66,7 @@ RUN {{ __setup_script__ }}
 # Default port for BentoServer
 EXPOSE 3000
 
-# expose Prometheus port
+# Expose Prometheus port
 EXPOSE {{ __prometheus_port__ }}
 
 RUN chmod +x {{ bento__entrypoint }}
