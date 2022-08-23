@@ -105,8 +105,6 @@ RUNNER_CFG_SCHEMA = {
 SCHEMA = Schema(
     {
         "api_server": {
-            "port": And(int, _larger_than_zero),
-            "host": And(str, _is_ip_address),
             "workers": Or(And(int, _larger_than_zero), None),
             "timeout": And(int, _larger_than_zero),
             Optional("ssl"): {
@@ -138,6 +136,8 @@ SCHEMA = Schema(
                 },
             },
             "http": {
+                "host": And(str, _is_ip_address),
+                "port": And(int, _larger_than_zero),
                 "backlog": And(int, _larger_than(64)),
                 "max_request_size": And(int, _larger_than_zero),
                 "cors": {
@@ -150,8 +150,10 @@ SCHEMA = Schema(
                     "access_control_expose_headers": Or([str], str, None),
                 },
             },
-            "grpc": {
+            Optional("grpc"): {
                 "enabled": bool,
+                "host": And(str, _is_ip_address),
+                "port": And(int, _larger_than_zero),
                 "metrics": {
                     "port": And(int, _larger_than_zero),
                     "host": And(str, _is_ip_address),
@@ -196,6 +198,8 @@ SCHEMA = Schema(
     }
 )
 
+_WARNING_MESSAGE = "field 'api_server.%s' is deprecated and have been recently move to 'api_server.http.%s'"
+
 
 class BentoMLConfiguration:
     def __init__(
@@ -230,25 +234,41 @@ class BentoMLConfiguration:
                 override_config: dict[str, t.Any] = yaml.safe_load(f)
 
             # compatibility layer with old configuration pre gRPC features
-            # api_server.[max_request_size|backlog|cors] -> api_server.http.$^
+            # api_server.[max_request_size|backlog|cors|port|host] -> api_server.http.$^
             if "api_server" in override_config:
                 user_api_config = override_config["api_server"]
+                # check if user are using older configuration
                 if "http" not in user_api_config:
                     user_api_config["http"] = {}
+
+                if "port" in user_api_config:
+                    user_api_port = user_api_config.pop("port")
+                    user_api_config["http"]["port"] = user_api_port
+                    logger.warning(_WARNING_MESSAGE, "port", "port")
+                if "host" in user_api_config:
+                    user_api_host = user_api_config.pop("host")
+                    user_api_config["http"]["host"] = user_api_host
+                    logger.warning(_WARNING_MESSAGE, "host", "host")
                 if "max_request_size" in user_api_config:
                     user_mrs = user_api_config.pop("max_request_size")
                     user_api_config["http"]["max_request_size"] = user_mrs
+                    logger.warning(
+                        _WARNING_MESSAGE, "max_request_size", "max_request_size"
+                    )
                 if "backlog" in user_api_config:
                     user_backlog = user_api_config.pop("backlog")
                     user_api_config["http"]["backlog"] = user_backlog
+                    logger.warning(_WARNING_MESSAGE, "backlog", "backlog")
                 if "cors" in user_api_config:
                     user_cors = user_api_config.pop("cors")
                     user_api_config["http"]["cors"] = user_cors
+                    logger.warning(_WARNING_MESSAGE, "cors", "cors")
+
                 config_merger.merge(override_config["api_server"], user_api_config)
 
                 assert all(
                     key not in override_config["api_server"]
-                    for key in ["cors", "backlog", "max_request_size"]
+                    for key in ["cors", "backlog", "max_request_size", "host", "port"]
                 )
 
             config_merger.merge(self.config, override_config)
@@ -363,6 +383,8 @@ class _BentoMLContainerClass:
 
         class _GrpcConfiguration(_ConfigurationItem):
             enabled: providers.Static[bool]
+            host: providers.Static[str]
+            port: providers.Static[int]
             max_concurrent_streams: providers.Static[int | None]
             max_message_length: providers.Static[int | None]
             maximum_concurrent_rpcs: providers.Static[int | None]
@@ -380,6 +402,28 @@ class _BentoMLContainerClass:
 
     grpc: _GrpcConfiguration = t.cast("_GrpcConfiguration", api_server_config.grpc)
 
+    if TYPE_CHECKING:
+
+        class _HttpConfiguration(_ConfigurationItem):
+            enabled: providers.Static[bool]
+            host: providers.Static[str]
+            port: providers.Static[int]
+            max_request_size: providers.Static[int]
+            backlog: providers.Static[int]
+
+            class _CorsConfiguration(_ConfigurationItem):
+                enabled: providers.Static[bool]
+                access_control_allow_origin: providers.Static[str | None]
+                access_control_allow_credentials: providers.Static[bool | None]
+                access_control_allow_headers: providers.Static[list[str] | str | None]
+                access_control_allow_methods: providers.Static[list[str] | str | None]
+                access_control_max_age: providers.Static[int | None]
+                access_control_expose_headers: providers.Static[str | list[str] | None]
+
+            cors: _CorsConfiguration
+
+    http: _HttpConfiguration = t.cast("_HttpConfiguration", api_server_config.http)
+
     development_mode = providers.Static(True)
 
     @providers.SingletonFactory
@@ -392,41 +436,38 @@ class _BentoMLContainerClass:
     @providers.SingletonFactory
     @staticmethod
     def access_control_options(
-        allow_origins: t.List[str] = Provide[
-            api_server_config.http.cors.access_control_allow_origin
-        ],
-        allow_credentials: t.List[str] = Provide[
-            api_server_config.http.cors.access_control_allow_credentials
-        ],
-        expose_headers: t.List[str] = Provide[
-            api_server_config.http.cors.access_control_expose_headers
-        ],
-        allow_methods: t.List[str] = Provide[
-            api_server_config.http.cors.access_control_allow_methods
-        ],
-        allow_headers: t.List[str] = Provide[
-            api_server_config.http.cors.access_control_allow_headers
-        ],
-        max_age: int = Provide[api_server_config.http.cors.access_control_max_age],
-    ) -> t.Dict[str, t.Union[t.List[str], int]]:
-        kwargs = dict(
-            allow_origins=allow_origins,
-            allow_credentials=allow_credentials,
-            expose_headers=expose_headers,
-            allow_methods=allow_methods,
-            allow_headers=allow_headers,
-            max_age=max_age,
-        )
-
-        filtered_kwargs = {k: v for k, v in kwargs.items() if v is not None}
-        return filtered_kwargs
+        allow_origins: str | None = Provide[http.cors.access_control_allow_origin],
+        allow_credentials: bool
+        | None = Provide[http.cors.access_control_allow_credentials],
+        expose_headers: list[str]
+        | str
+        | None = Provide[http.cors.access_control_expose_headers],
+        allow_methods: list[str]
+        | str
+        | None = Provide[http.cors.access_control_allow_methods],
+        allow_headers: list[str]
+        | str
+        | None = Provide[http.cors.access_control_allow_headers],
+        max_age: int | None = Provide[http.cors.access_control_max_age],
+    ) -> dict[str, list[str] | str | int]:
+        # use {} instead of dict()
+        return {
+            key: value
+            for key, value in {
+                "allow_origins": allow_origins,
+                "allow_credentials": allow_credentials,
+                "expose_headers": expose_headers,
+                "allow_methods": allow_methods,
+                "allow_headers": allow_headers,
+                "max_age": max_age,
+            }.items()
+            if value
+        }
 
     api_server_workers = providers.Factory[int](
         lambda workers: workers or (multiprocessing.cpu_count() // 2) + 1,
         api_server_config.workers,
     )
-    service_port = api_server_config.port
-    service_host = api_server_config.host
 
     prometheus_multiproc_dir = providers.Factory[str](
         os.path.join,

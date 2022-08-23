@@ -1,12 +1,21 @@
-# type: ignore[no-untyped-def]
+from __future__ import annotations
 
 import os
 import typing as t
+import tempfile
 import contextlib
+from typing import TYPE_CHECKING
 
 import numpy as np
 import psutil
 import pytest
+
+if TYPE_CHECKING:
+    from pytest import FixtureRequest as _PytestFixtureRequest
+    from _pytest.config import Config
+
+    class FixtureRequest(_PytestFixtureRequest):
+        param: str
 
 
 @pytest.fixture()
@@ -20,14 +29,14 @@ def img_file(tmpdir) -> str:
 
 
 @pytest.fixture()
-def bin_file(tmpdir) -> str:
+def bin_file(tmpdir: str) -> str:
     bin_file_ = tmpdir.join("bin_file.bin")
     with open(bin_file_, "wb") as of:
         of.write("â".encode("gb18030"))
     return str(bin_file_)
 
 
-def pytest_configure(config):  # pylint: disable=unused-argument
+def pytest_configure(config: Config) -> None:  # pylint: disable=unused-argument
     import sys
     import subprocess
 
@@ -39,8 +48,17 @@ def pytest_configure(config):  # pylint: disable=unused-argument
     os.environ["SETUPTOOLS_USE_DISTUTILS"] = "stdlib"
 
 
+def pytest_sessionstart(session: Session):  # pylint: disable=unused-argument
+    from bentoml._internal.models import ModelStore
+
+    path = tempfile.mkdtemp("bentoml-pytest-e2e")
+    from bentoml._internal.configuration.containers import BentoMLContainer
+
+    BentoMLContainer.model_store.set(ModelStore(path))
+
+
 @pytest.fixture(scope="session", autouse=True)
-def clean_context():
+def clean_context() -> t.Generator[contextlib.ExitStack, None, None]:
     stack = contextlib.ExitStack()
     yield stack
     stack.close()
@@ -59,14 +77,13 @@ def server_config_file(request):
 
 @pytest.fixture(
     params=[
-        # "dev",
         "standalone",
         "docker",
         "distributed",
     ],
     scope="session",
 )
-def deployment_mode(request) -> str:
+def deployment_mode(request: FixtureRequest) -> str:
     return request.param
 
 

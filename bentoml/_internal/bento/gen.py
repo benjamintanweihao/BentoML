@@ -5,11 +5,10 @@ import typing as t
 import logging
 from sys import version_info
 from typing import TYPE_CHECKING
+from dataclasses import asdict
+from dataclasses import dataclass
 
-import attr
 from jinja2 import Environment
-from cattr.gen import override
-from cattr.gen import make_dict_unstructure_fn
 from jinja2.loaders import FileSystemLoader
 
 from ..utils import bentoml_cattr
@@ -25,7 +24,7 @@ if TYPE_CHECKING:
     from .build_config import DockerOptions
 
     TemplateFunc = t.Callable[[DockerOptions], t.Dict[str, t.Any]]
-    GenericFunc = t.Callable[P, t.Any]
+    F = t.Callable[P, t.Any]
 
 BENTO_UID_GID = 1034
 BENTO_USER = "bentoml"
@@ -48,57 +47,32 @@ def expands_bento_path(*path: str, bento_path: str = BENTO_PATH) -> str:
     return "/".join([bento_path, *path])
 
 
-J2_FUNCTION: dict[str, GenericFunc[t.Any]] = {
-    "expands_bento_path": expands_bento_path,
-}
+J2_FUNCTION: dict[str, F[t.Any]] = {"expands_bento_path": expands_bento_path}
 
 to_preserved_field: t.Callable[[str], str] = lambda s: f"__{s}__"
 to_bento_field: t.Callable[[str], str] = lambda s: f"bento__{s}"
 to_options_field: t.Callable[[str], str] = lambda s: f"__options__{s}"
 
 
-@attr.frozen(on_setattr=None, eq=False, repr=False)
+@dataclass
 class ReservedEnv:
     base_image: str
-    supported_architectures: t.List[str]
-    python_version: str = attr.field(
-        default=f"{version_info.major}.{version_info.minor}"
-    )
-    prometheus_port: int = attr.field(default=BentoMLContainer.grpc.metrics.port.get())
+    python_version: str = f"{version_info.major}.{version_info.minor}"
+    prometheus_port: int = BentoMLContainer.grpc.metrics.port.get()
+
+    def asdict(self) -> dict[str, t.Any]:
+        return {to_preserved_field(k): v for k, v in asdict(self).items()}
 
 
-bentoml_cattr.register_unstructure_hook_func(
-    lambda cls: issubclass(cls, ReservedEnv),
-    make_dict_unstructure_fn(
-        ReservedEnv,
-        bentoml_cattr,
-        **{
-            a.name: override(rename=to_preserved_field(a.name))
-            for a in attr.fields(ReservedEnv)
-        },
-    ),
-)
-
-
-@attr.frozen(on_setattr=None, eq=False, repr=False)
+@dataclass
 class CustomizableEnv:
-    uid_gid: int = attr.field(default=BENTO_UID_GID)
-    user: str = attr.field(default=BENTO_USER)
-    home: str = attr.field(default=BENTO_HOME)
-    path: str = attr.field(default=BENTO_PATH)
+    uid_gid: int = BENTO_UID_GID
+    user: str = BENTO_USER
+    home: str = BENTO_HOME
+    path: str = BENTO_PATH
 
-
-bentoml_cattr.register_unstructure_hook_func(
-    lambda cls: issubclass(cls, CustomizableEnv),
-    make_dict_unstructure_fn(
-        CustomizableEnv,
-        bentoml_cattr,
-        **{
-            a.name: override(rename=to_bento_field(a.name))
-            for a in attr.fields(CustomizableEnv)
-        },
-    ),
-)
+    def asdict(self) -> dict[str, t.Any]:
+        return {to_bento_field(k): v for k, v in asdict(self).items()}
 
 
 def get_templates_variables(
@@ -129,17 +103,15 @@ def get_templates_variables(
             else:
                 python_version = python_version
             base_image = spec.image.format(spec_version=python_version)
-        supported_architecture = spec.supported_architectures
     else:
         base_image = options.base_image
-        # TODO: allow user to specify supported architectures of the base image
-        supported_architecture = ["amd64"]
         logger.info(
-            f"BentoML will not install Python to custom base images; ensure the base image '{base_image}' has Python installed."
+            "BentoML will not install Python to custom base images; ensure the base image '%s' has Python installed.",
+            base_image,
         )
 
     # environment returns are
-    # __base_image__, __supported_architectures__
+    # __base_image__, __python_version__, __prometheus_port__
     # bento__uid_gid, bento__user, bento__home, bento__path
     # __options__distros, __options__base_image, __options_env, __options_system_packages, __options_setup_script
     return {
@@ -147,13 +119,8 @@ def get_templates_variables(
             to_options_field(k): v
             for k, v in bentoml_cattr.unstructure(options).items()
         },
-        **bentoml_cattr.unstructure(CustomizableEnv()),
-        **bentoml_cattr.unstructure(
-            ReservedEnv(
-                base_image=base_image,
-                supported_architectures=supported_architecture,
-            )
-        ),
+        **CustomizableEnv().asdict(),
+        **ReservedEnv(base_image=base_image).asdict(),
     }
 
 

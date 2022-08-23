@@ -375,7 +375,7 @@ def host_bento(
     Host a bentoml service, yields the host URL.
 
     Args:
-        bento: a beoto tag or `module_path:service`
+        bento: a bento tag or `module_path:service`
         project_path: the path to the project directory
         config_file: the path to the config file
         deployment_mode: the deployment mode, one of `standalone`, `docker` or `distributed`

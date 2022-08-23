@@ -29,7 +29,7 @@ def add_serve_command(cli: click.Group) -> None:
         "-p",
         "--port",
         type=click.INT,
-        default=BentoMLContainer.service_port.get(),
+        default=BentoMLContainer.http.port.get(),
         help="The port to listen on for the REST api server",
         envvar="BENTOML_PORT",
         show_default=True,
@@ -37,7 +37,7 @@ def add_serve_command(cli: click.Group) -> None:
     @click.option(
         "--host",
         type=click.STRING,
-        default=BentoMLContainer.service_host.get(),
+        default=BentoMLContainer.http.host.get(),
         help="The host to bind for the REST api server [defaults: 127.0.0.1(dev), 0.0.0.0(production)]",
         envvar="BENTOML_HOST",
     )
@@ -51,7 +51,7 @@ def add_serve_command(cli: click.Group) -> None:
     @click.option(
         "--backlog",
         type=click.INT,
-        default=BentoMLContainer.api_server_config.http.backlog.get(),
+        default=BentoMLContainer.http.backlog.get(),
         help="The maximum number of pending connections.",
         show_default=True,
     )

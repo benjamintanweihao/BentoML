@@ -14,9 +14,9 @@ from ...utils import cached_property
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-
     from grpc_health.v1 import health_pb2 as pb_health
-    from grpc_health.v1 import health_pb2_grpc as health_services
+    from grpc_health.v1 import health_pb2_grpc as services_health
+    from typing_extensions import Self
 
     from bentoml.grpc.v1 import service_pb2_grpc as services
 
@@ -32,8 +32,8 @@ else:
         "grpc_health.v1.health_pb2",
         exc_msg=health_exception_msg,
     )
-    health_services = LazyLoader(
-        "health_services",
+    services_health = LazyLoader(
+        "services_health",
         globals(),
         "grpc_health.v1.health_pb2_grpc",
         exc_msg=health_exception_msg,
@@ -41,7 +41,7 @@ else:
 
 
 class Server:
-    """An Uvicorn-like implementation for async gRPC server."""
+    """An async implementation of a gRPC server."""
 
     def __init__(self, config: Config):
         self.config = config
@@ -50,12 +50,16 @@ class Server:
         # define a cleanup future list
         self.cleanup_tasks: list[t.Coroutine[t.Any, t.Any, None]] = []
 
+        self.loaded = False
+
     @cached_property
     def loop(self) -> asyncio.AbstractEventLoop:
         return asyncio.get_event_loop()
 
-    def run(self) -> None:
+    def load(self) -> Self:
         from concurrent.futures import ThreadPoolExecutor
+
+        assert not self.loaded
 
         if not bool(self.servicer):
             self.servicer.load()
@@ -69,6 +73,13 @@ class Server:
             handlers=self.config.handlers,
             interceptors=self.servicer.interceptors_stack,
         )
+        self.loaded = True
+
+        return self
+
+    def run(self) -> None:
+        if not self.loaded:
+            self.load()
 
         try:
             self.loop.run_until_complete(self.serve())
@@ -101,7 +112,7 @@ class Server:
         services.add_BentoServiceServicer_to_server(
             self.servicer.bento_servicer, self.server
         )
-        health_services.add_HealthServicer_to_server(
+        services_health.add_HealthServicer_to_server(
             self.servicer.health_servicer, self.server
         )
 

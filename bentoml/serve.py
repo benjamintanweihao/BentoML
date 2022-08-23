@@ -25,7 +25,9 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
-PROMETHEUS_MESSAGE = "Prometheus metrics for {server_type} BentoServer of '{bento_identifier}' can be accessed at '{addr}'."
+PROMETHEUS_MESSAGE = (
+    "Prometheus metrics for %s BentoServer of '%s' can be accessed at '%s'."
+)
 
 SCRIPT_RUNNER = "bentoml_cli.worker.runner"
 SCRIPT_API_SERVER = "bentoml_cli.worker.http_api_server"
@@ -127,7 +129,7 @@ def log_grpcui_message(port: int) -> None:
         "docker run -it --rm {network_args} fullstorydev/grpcui -plaintext {platform_deps}:{port}".format,
         port=port,
     )
-    message = "To use gRPC UI, run the following command: '{instruction}', followed by opening 'http://0.0.0.0:8080' in your browser of choice."
+    message = "To use gRPC UI, run the following command: '%s', followed by opening 'http://0.0.0.0:8080' in your browser of choice."
 
     linux_instruction = docker_run(
         platform_deps="0.0.0.0", network_args="--network=host"
@@ -141,9 +143,9 @@ def log_grpcui_message(port: int) -> None:
             f"If your local machine either MacOS or Windows, then use '{mac_win_instruction}', otherwise use '{linux_instruction}'."
         )
     elif psutil.WINDOWS or psutil.MACOS:
-        logger.info(message.format(instruction=mac_win_instruction))
+        logger.info(message, mac_win_instruction)
     elif psutil.LINUX:
-        logger.info(message.format(instruction=linux_instruction))
+        logger.info(message, linux_instruction)
 
 
 def ssl_args(
@@ -181,9 +183,9 @@ def ssl_args(
 def serve_development(
     bento_identifier: str,
     working_dir: str,
-    port: int = Provide[BentoMLContainer.api_server_config.port],
-    host: str = Provide[BentoMLContainer.api_server_config.host],
-    backlog: int = Provide[BentoMLContainer.api_server_config.http.backlog],
+    port: int = Provide[BentoMLContainer.http.port],
+    host: str = Provide[BentoMLContainer.http.host],
+    backlog: int = Provide[BentoMLContainer.http.backlog],
     bentoml_home: str = Provide[BentoMLContainer.bentoml_home],
     ssl_certfile: str | None = Provide[BentoMLContainer.api_server_config.ssl.certfile],
     ssl_keyfile: str | None = Provide[BentoMLContainer.api_server_config.ssl.keyfile],
@@ -218,6 +220,8 @@ def serve_development(
     circus_sockets: list[CircusSocket] = []
 
     if grpc:
+        host = BentoMLContainer.grpc.host.get()
+        port = BentoMLContainer.grpc.port.get()
         if not reflection:
             logger.info(
                 "'reflection' is disabled by default. Tools such as gRPCUI or grpcurl relies on server reflection. To use those, pass '--enable-reflection' to CLI."
@@ -226,14 +230,14 @@ def serve_development(
             log_grpcui_message(port)
 
         with contextlib.ExitStack() as port_stack:
-            api_port = port_stack.enter_context(enable_so_reuseport(host, port))
+            enabled_port = port_stack.enter_context(enable_so_reuseport(host, port))
 
             args = [
                 "-m",
                 SCRIPT_GRPC_DEV_API_SERVER,
                 bento_identifier,
                 "--bind",
-                f"tcp://0.0.0.0:{api_port}",
+                f"tcp://{host}:{enabled_port}",
                 "--working-dir",
                 working_dir,
             ]
@@ -269,6 +273,7 @@ def serve_development(
                     name=PROMETHEUS_SERVER_NAME,
                     host=metrics_host,
                     port=metrics_port,
+                    # We use backlog here since the sidecar is an Uvicorn server.
                     backlog=backlog,
                 )
             )
@@ -289,15 +294,17 @@ def serve_development(
                     working_dir=working_dir,
                     numprocesses=1,
                     singleton=True,
+                    # we don't want to close stdin for child process in case user use debugger.
+                    # See https://circus.readthedocs.io/en/latest/for-ops/configuration/
+                    close_child_stdin=False,
                 )
             )
 
             logger.info(
-                PROMETHEUS_MESSAGE.format(
-                    bento_identifier=bento_identifier,
-                    server_type="gRPC",
-                    addr=f"http://{metrics_host}:{metrics_port}",
-                )
+                PROMETHEUS_MESSAGE,
+                bento_identifier,
+                "gRPC",
+                f"http://{metrics_host}:{metrics_port}",
             )
     else:
         circus_sockets.append(
@@ -334,11 +341,10 @@ def serve_development(
             )
         )
         logger.info(
-            PROMETHEUS_MESSAGE.format(
-                bento_identifier=bento_identifier,
-                server_type="HTTP",
-                addr=f"http://{host}:{port}/metrics",
-            )
+            PROMETHEUS_MESSAGE,
+            bento_identifier,
+            "HTTP",
+            f"http://{host}:{port}/metrics",
         )
 
     plugins = []
@@ -387,7 +393,7 @@ def serve_production(
     working_dir: str,
     port: int = Provide[BentoMLContainer.api_server_config.port],
     host: str = Provide[BentoMLContainer.api_server_config.host],
-    backlog: int = Provide[BentoMLContainer.api_server_config.http.backlog],
+    backlog: int = Provide[BentoMLContainer.http.backlog],
     api_workers: int | None = None,
     ssl_certfile: str | None = Provide[BentoMLContainer.api_server_config.ssl.certfile],
     ssl_keyfile: str | None = Provide[BentoMLContainer.api_server_config.ssl.keyfile],
@@ -424,6 +430,8 @@ def serve_production(
 
     prometheus_dir = ensure_prometheus_dir()
 
+    # Check whether users are running --grpc on windows
+    # also raising warning if users running on MacOS or FreeBSD
     if grpc:
         if psutil.WINDOWS:
             raise UnprocessableEntity(
@@ -431,7 +439,8 @@ def serve_production(
             )
         if psutil.MACOS or psutil.FREEBSD:
             logger.warning(
-                f"Due to gRPC implementation on exposing SO_REUSEPORT, '--production' behaviour on {'MacOS' if psutil.MACOS else 'FreeBSD'} is not correct. We recommend to containerize BentoServer as a Linux container instead."
+                f"Due to gRPC implementation on exposing SO_REUSEPORT, '--production' behaviour on %s is not correct. We recommend to containerize BentoServer as a Linux container instead.",
+                "MacOS" if psutil.MACOS else "FreeBSD",
             )
 
     if psutil.POSIX:
@@ -516,6 +525,8 @@ def serve_production(
         raise NotImplementedError("Unsupported platform: {}".format(sys.platform))
 
     if grpc:
+        host = BentoMLContainer.grpc.host.get()
+        port = BentoMLContainer.grpc.port.get()
         if not reflection:
             logger.info(
                 "'reflection' is disabled by default. Tools such as gRPCUI or grpcurl relies on server reflection. To use those, pass '--enable-reflection' to CLI."
@@ -567,6 +578,7 @@ def serve_production(
                 name=PROMETHEUS_SERVER_NAME,
                 host=metrics_host,
                 port=metrics_port,
+                # We use backlog here since the sidecar is an Uvicorn server.
                 backlog=backlog,
             )
 
@@ -589,11 +601,10 @@ def serve_production(
                 )
             )
             logger.info(
-                PROMETHEUS_MESSAGE.format(
-                    bento_identifier=bento_identifier,
-                    server_type="gRPC",
-                    addr=f"http://{metrics_host}:{metrics_port}",
-                )
+                PROMETHEUS_MESSAGE,
+                bento_identifier,
+                "gRPC",
+                f"http://{metrics_host}:{metrics_port}",
             )
     else:
         circus_socket_map[API_SERVER_NAME] = CircusSocket(
@@ -638,11 +649,10 @@ def serve_production(
         )
 
         logger.info(
-            PROMETHEUS_MESSAGE.format(
-                bento_identifier=bento_identifier,
-                server_type="HTTP",
-                addr=f"http://{host}:{port}/metrics",
-            )
+            PROMETHEUS_MESSAGE,
+            bento_identifier,
+            "HTTP",
+            f"http://{host}:{port}/metrics",
         )
 
     arbiter = create_standalone_arbiter(

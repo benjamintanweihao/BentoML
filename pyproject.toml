@@ -66,10 +66,10 @@ exclude = '''
 extend-exclude = "(_pb2.py$|_pb2_grpc.py$)"
 
 [tool.pytest.ini_options]
-addopts = "-rfEX -p pytester -p no:warnings -x"
+addopts = "-rfEX -p pytester -p no:warnings -x --capture=tee-sys"
 python_files = ["test_*.py", "*_test.py"]
 testpaths = ["tests"]
-markers = ["gpus"]
+markers = ["gpus", "disable-tf-eager-execution"]
 
 [tool.pylint.main]
 recursive = true

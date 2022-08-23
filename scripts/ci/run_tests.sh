@@ -192,6 +192,10 @@ main() {
     OPTS=( "--framework" "$target" ${OPTS[@]} )
   fi
 
+  if [ "$type_tests" == 'unit' ]; then
+    OPTS=( ${OPTS[@]} --dist=loadfile -n auto )
+  fi
+
   if [ "$SKIP_DEPS" -eq 0 ]; then
     # setup tests environment
     if [ -f "$REQ_FILE" ]; then

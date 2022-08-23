@@ -63,7 +63,7 @@ class GRPCAppFactory:
         return on_shutdown
 
     def __call__(self) -> Servicer:
-        from .grpc.servicer import Servicer
+        from .grpc import Servicer
 
         return Servicer(
             self.bento_service,
