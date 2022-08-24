@@ -40,19 +40,11 @@ class RunnerMethod(t.Generic[T, P, R]):
     max_batch_size: int
     max_latency_ms: int
 
-    def run(self, *args: t.Any, **kwargs: t.Any) -> t.Any:
-        return self.runner._runner_handle.run_method(  # type: ignore
-            self,
-            *args,
-            **kwargs,
-        )
+    def run(self, *args: "P.args", **kwargs: "P.kwargs") -> R:
+        return self.runner._runner_handle.run_method(self, *args, **kwargs)
 
-    async def async_run(self, *args: t.Any, **kwargs: t.Any) -> t.Any:
-        return await self.runner._runner_handle.async_run_method(  # type: ignore
-            self,
-            *args,
-            **kwargs,
-        )
+    async def async_run(self, *args: "P.args", **kwargs: "P.kwargs") -> R:
+        return await self.runner._runner_handle.async_run_method(self, *args, **kwargs)
 
 
 @attr.define(slots=False, frozen=True, eq=False)

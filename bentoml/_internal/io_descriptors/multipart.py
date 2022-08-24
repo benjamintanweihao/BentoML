@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
     from google.protobuf.internal.containers import MessageMap
 
-    from bentoml.grpc.v1 import service_pb2 as pb
+    from bentoml.grpc.v1alpha1 import service_pb2 as pb
 
     from ..types import LazyType
     from ..context import InferenceApiContext as Context

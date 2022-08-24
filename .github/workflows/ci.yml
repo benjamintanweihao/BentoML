@@ -178,7 +178,7 @@ jobs:
       - name: Generate gRPC stubs
         run: |
           pip install "grpcio-tools>=1.41" mypy-protobuf
-          python -m grpc_tools.protoc -I. --grpc_python_out=. --python_out=. --mypy_out=. --mypy_grpc_out=. bentoml/grpc/v1/service.proto bentoml/grpc/v1/service_test.proto
+          python -m grpc_tools.protoc -I. --grpc_python_out=. --python_out=. --mypy_out=. --mypy_grpc_out=. bentoml/grpc/v1alpha1/service.proto bentoml/grpc/v1alpha1/service_test.proto
 
       - name: Install dependencies
         run: |
@@ -255,26 +255,26 @@ jobs:
       - name: Generate gRPC stubs
         run: |
           pip install "grpcio-tools>=1.41" mypy-protobuf
-          python -m grpc_tools.protoc -I. --grpc_python_out=. --python_out=. --mypy_out=. --mypy_grpc_out=. bentoml/grpc/v1/service.proto bentoml/grpc/v1/service_test.proto
+          python -m grpc_tools.protoc -I. --grpc_python_out=. --python_out=. --mypy_out=. --mypy_grpc_out=. bentoml/grpc/v1alpha1/service.proto bentoml/grpc/v1alpha1/service_test.proto
 
       - name: Install dependencies
         run: |
           pip install -e .
           pip install -r requirements/tests-requirements.txt
-          pip install -r tests/e2e/bento_server_general_features/requirements.txt
+          pip install -r tests/e2e/bento_server_http/requirements.txt
 
       - name: Export Action Envvar
         run: export GITHUB_ACTION=true
 
       - name: Run tests and generate coverage report
-        run: ./scripts/ci/run_tests.sh general_features
+        run: ./scripts/ci/run_tests.sh http_server
 
       - name: Upload test coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
           flags: e2e-tests
           directory: ./
-          files: ./tests/e2e/bento_server_general_features/general_features.xml
+          files: ./tests/e2e/bento_server_http/http_server.xml
           verbose: true
 
 concurrency:

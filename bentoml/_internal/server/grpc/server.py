@@ -18,13 +18,13 @@ if TYPE_CHECKING:
     from grpc_health.v1 import health_pb2_grpc as services_health
     from typing_extensions import Self
 
-    from bentoml.grpc.v1 import service_pb2_grpc as services
+    from bentoml.grpc.v1alpha1 import service_pb2_grpc as services
 
     from .config import Config
 else:
     from bentoml.grpc.utils import import_generated_stubs
 
-    pb, services = import_generated_stubs()
+    _, services = import_generated_stubs()
     health_exception_msg = "'grpcio-health-checking' is required for using health checking endpoints. Install with 'pip install grpcio-health-checking'."
     pb_health = LazyLoader(
         "pb_health",

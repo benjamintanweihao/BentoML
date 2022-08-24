@@ -1,9 +1,9 @@
 import pickle_model
 
-import bentoml.picklable_model
+import bentoml
 
 
-def train():
+def create_model():
     bentoml.picklable_model.save_model(
         "py_model.case-1.e2e",
         pickle_model.PickleModel(),
@@ -18,7 +18,3 @@ def train():
         },
         external_modules=[pickle_model],
     )
-
-
-if __name__ == "__main__":
-    train()

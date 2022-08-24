@@ -1,0 +1,10 @@
+service: service:svc
+python:
+  packages:
+    - pandas
+    - pydantic
+    - Pillow
+    - scikit-learn
+    - pyarrow
+  extras_require:
+    - grpc

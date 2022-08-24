@@ -25,7 +25,7 @@ from ..service.openapi.specification import RequestBody
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from bentoml.grpc.v1 import service_pb2 as pb
+    from bentoml.grpc.v1alpha1 import service_pb2 as pb
 
     from ..context import InferenceApiContext as Context
 

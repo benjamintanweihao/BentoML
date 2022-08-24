@@ -26,7 +26,7 @@ COPY <<-EOT /workspace/requirements.txt
     # use known working version until the memory leak is resolved in the future
     # (see https://github.com/grpc/grpc/issues/28513)
     grpcio-tools<1.43
-    mypy-protobuf
+    mypy-protobuf>=3.3.0
 EOT
 
 RUN --mount=type=cache,target=/var/lib/apt \
@@ -39,7 +39,7 @@ EOF
 	fi
 
 	echo "Generating gRPC stubs..."
-	docker run --rm -it -v "$GIT_ROOT":/workspace --platform=linux/amd64 "$STUBS_GENERATOR" python -m grpc_tools.protoc -I. --grpc_python_out=. --python_out=. --mypy_out=. --mypy_grpc_out=. bentoml/grpc/v1/service.proto bentoml/grpc/v1/service_test.proto
+	docker run --rm -it -v "$GIT_ROOT":/workspace --platform=linux/amd64 "$STUBS_GENERATOR" python -m grpc_tools.protoc -I. --grpc_python_out=. --python_out=. --mypy_out=. --mypy_grpc_out=. bentoml/grpc/v1alpha1/service.proto bentoml/grpc/v1alpha1/service_test.proto
 }
 
 if ! [ "${#@}" -eq 0 ]; then

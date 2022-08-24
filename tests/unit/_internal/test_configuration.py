@@ -16,9 +16,7 @@ if TYPE_CHECKING:
 
 
 @pytest.fixture(scope="function", name="config_cls")
-def get_bentomlconfiguration_from_str(
-    tmp_path: Path,
-) -> t.Callable[[str], ConfigDictType]:
+def fixture_config_cls(tmp_path: Path) -> t.Callable[[str], ConfigDictType]:
     def inner(config: str) -> ConfigDictType:
         path = tmp_path / "configuration.yaml"
         path.write_text(config)
@@ -177,7 +175,9 @@ runners:
     assert bentoml_cfg["runners"]["resources"] == {"nvidia.com/gpu": "[1, 2, 4]"}
 
 
-RUNNER_TIMEOUTS = """\
+@pytest.mark.usefixtures("config_cls")
+def test_runner_timeouts(config_cls: t.Callable[[str], ConfigDictType]):
+    RUNNER_TIMEOUTS = """\
 runners:
     timeout: 50
     test_runner_1:
@@ -185,10 +185,7 @@ runners:
     test_runner_2:
         resources: system
 """
-
-
-def test_runner_timeouts():
-    bentoml_cfg = get_bentomlconfiguration_from_str(RUNNER_TIMEOUTS)
+    bentoml_cfg = config_cls(RUNNER_TIMEOUTS)
     runner_cfg = bentoml_cfg["runners"]
     assert runner_cfg["timeout"] == 50
     assert runner_cfg["test_runner_1"]["timeout"] == 100

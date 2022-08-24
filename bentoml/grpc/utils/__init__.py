@@ -15,11 +15,12 @@ from bentoml._internal.utils.lazy_loader import LazyLoader
 if TYPE_CHECKING:
     import grpc
 
-    from bentoml.grpc.v1 import service_pb2 as pb
-    from bentoml.grpc.v1 import service_pb2_grpc as services
     from bentoml.grpc.types import RpcMethodHandler
+    from bentoml.grpc.v1alpha1 import service_pb2 as pb
+    from bentoml.grpc.v1alpha1 import service_pb2_grpc as services
 
-    def import_generated_stubs(version: str = "v1") -> tuple[pb, services]:
+    # We need this here so that __all__ is detected due to lazy import
+    def import_generated_stubs(version: str = "v1alpha1") -> tuple[pb, services]:
         ...
 
 else:

@@ -16,9 +16,6 @@ if TYPE_CHECKING:
 
 def pytest_addoption(parser: Parser) -> None:
     parser.addoption(
-        "--runslow", action="store_true", default=False, help="run slow tests"
-    )
-    parser.addoption(
         "--gpus", action="store_true", default=False, help="run gpus related tests"
     )
     parser.addoption(

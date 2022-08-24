@@ -16,13 +16,13 @@ from bentoml.grpc.utils import GRPC_CONTENT_TYPE
 if TYPE_CHECKING:
     from grpc.aio._typing import MetadataType
 
-    from bentoml.grpc.v1 import service_pb2 as pb
     from bentoml.grpc.types import Request
     from bentoml.grpc.types import Response
     from bentoml.grpc.types import RpcMethodHandler
     from bentoml.grpc.types import AsyncHandlerMethod
     from bentoml.grpc.types import HandlerCallDetails
     from bentoml.grpc.types import BentoServicerContext
+    from bentoml.grpc.v1alpha1 import service_pb2 as pb
 else:
     from bentoml.grpc.utils import import_generated_stubs
 

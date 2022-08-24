@@ -43,7 +43,7 @@ def build_bentoml_editable_wheel(target_path: str) -> None:
     try:
         from importlib import import_module
 
-        _ = import_module("bentoml.grpc.v1.service_pb2")
+        _ = import_module("bentoml.grpc.v1alpha1.service_pb2")
     except ModuleNotFoundError:
         raise UnprocessableEntity(
             f"Generated stubs are not found. Make sure to run '{module_location}/scripts/generate_grpc_stubs.sh' beforehand to generate gRPC stubs."

@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     import pydantic.schema as schema
     from google.protobuf import struct_pb2
 
-    from bentoml.grpc.v1 import service_pb2 as pb
+    from bentoml.grpc.v1alpha1 import service_pb2 as pb
 
     from .. import external_typing as ext
     from ..context import InferenceApiContext as Context
@@ -327,14 +327,7 @@ class JSON(IODescriptor[JSONType]):
     async def to_proto(self, obj: JSONType) -> struct_pb2.Value:
         from google.protobuf.json_format import Parse
 
-        # use pydantic model for validation.
-        if self._pydantic_model:
-            try:
-                self._pydantic_model.validate(obj)
-            except pydantic.ValidationError as e:
-                raise UnprocessableEntity(f"Invalid JSON input received: {e}")
-
-        if isinstance(obj, pydantic.BaseModel):
+        if LazyType["pydantic.BaseModel"]("pydantic.BaseModel").isinstance(obj):
             obj = obj.dict()
 
         msg = struct_pb2.Value()

@@ -1,8 +1,7 @@
-# pylint: disable=redefined-outer-name # pragma: no cover
+# pylint: disable=redefined-outer-name,not-context-manager
 from __future__ import annotations
 
 import os
-import re
 import sys
 import time
 import socket
@@ -18,10 +17,11 @@ import multiprocessing
 from typing import TYPE_CHECKING
 from contextlib import contextmanager
 
-from .._internal.tag import Tag
-from .._internal.utils import reserve_free_port
-from .._internal.utils import cached_contextmanager
-from .._internal.utils.platform import kill_subprocess_tree
+from bentoml._internal.tag import Tag
+from bentoml._internal.utils import reserve_free_port
+from bentoml._internal.utils import cached_contextmanager
+from bentoml._internal.utils.platform import kill_subprocess_tree
+from bentoml._internal.configuration.containers import BentoMLContainer
 
 logger = logging.getLogger("bentoml")
 
@@ -30,6 +30,8 @@ if TYPE_CHECKING:
     from aiohttp.typedefs import LooseHeaders
     from starlette.datastructures import Headers
     from starlette.datastructures import FormData
+
+    from bentoml._internal.bento.bento import Bento
 
 
 async def parse_multipart_form(headers: "Headers", body: bytes) -> "FormData":
@@ -108,49 +110,58 @@ def _wait_until_api_server_ready(
 
 
 @cached_contextmanager("{project_path}")
-def bentoml_build(project_path: str) -> t.Generator["Tag", None, None]:
+def bentoml_build(
+    project_path: str, bentoml_home: str | None = None
+) -> t.Generator[Bento, None, None]:
     """
     Build a BentoML project.
     """
+    if bentoml_home:
+        from bentoml._internal.configuration.containers import BentoMLContainer
+
+        BentoMLContainer.bentoml_home.set(bentoml_home)
+
     logger.info(f"Building bento: {project_path}")
-    output = subprocess.check_output(
-        ["bentoml", "build", project_path],
-        stderr=subprocess.STDOUT,
-        env=dict(os.environ, COLUMNS="200"),
-    )
-    match = re.search(
-        r'Bento\(tag="([A-Za-z0-9\-_\.]+:[a-z0-9]+)"\)',
-        output.decode(),
-    )
-    assert match, f"Build failed. The details:\n {output.decode()}"
-    tag = Tag.from_taglike(match[1])
-    yield tag
-    logger.info(f"Deleting bento: {tag}")
-    subprocess.call(["bentoml", "delete", "-y", str(tag)])
+    from bentoml import bentos
+
+    bento = bentos.build_bentofile(build_ctx=project_path)
+    yield bento
+    logger.info(f"Deleting bento: {bento.tag}")
+    bentos.delete(str(bento.tag))
 
 
 @cached_contextmanager("{bento_tag}, {image_tag}")
 def bentoml_containerize(
-    bento_tag: t.Union[str, "Tag"],
-    image_tag: t.Optional[str] = None,
+    bento_tag: str | Tag, image_tag: str | None = None, bentoml_home: str | None = None
 ) -> t.Generator[str, None, None]:
     """
     Build the docker image from a saved bento, yield the docker image tag
     """
+    if bentoml_home:
+        from bentoml._internal.configuration.containers import BentoMLContainer
+
+        BentoMLContainer.bentoml_home.set(bentoml_home)
+
     bento_tag = Tag.from_taglike(bento_tag)
     if image_tag is None:
         image_tag = bento_tag.name
+
+    from bentoml import bentos
+
     logger.info(f"Building bento server docker image: {bento_tag}")
-    subprocess.check_call(["bentoml", "containerize", str(bento_tag), "-t", image_tag])
+    bentos.containerize(str(bento_tag), docker_image_tag=image_tag)
+
     yield image_tag
+
     logger.info(f"Removing bento server docker image: {image_tag}")
     subprocess.call(["docker", "rmi", image_tag])
 
 
-@cached_contextmanager("{image_tag}, {config_file}")
+@cached_contextmanager("{image_tag}, {config_file}, {grpc}")
 def run_bento_server_in_docker(
     image_tag: str,
-    config_file: t.Optional[str] = None,
+    config_file: str | None = None,
+    grpc: bool = False,
     timeout: float = 40,
 ):
     """
@@ -179,7 +190,14 @@ def run_bento_server_in_docker(
         cmd.extend(
             ["-v", f"{os.path.abspath(config_file)}:/home/bentoml/bentoml_config.yml"]
         )
+    if grpc:
+        prom_port = BentoMLContainer.grpc.metrics.port.get()
+        cmd.extend(["-p", f"{prom_port}:{prom_port}"])
+
     cmd.append(image_tag)
+
+    if grpc:
+        cmd.extend(["--grpc", "--enable-reflection"])
 
     logger.info(f"Running API server docker image: {cmd}")
     with subprocess.Popen(
@@ -203,8 +221,9 @@ def run_bento_server_in_docker(
 @contextmanager
 def run_bento_server(
     bento: str,
-    workdir: t.Optional[str] = None,
-    config_file: t.Optional[str] = None,
+    workdir: str | None = None,
+    grpc: bool = False,
+    config_file: str | None = None,
     dev_server: bool = False,
     timeout: float = 90,
 ):
@@ -223,6 +242,10 @@ def run_bento_server(
             cmd += ["--port", f"{port}"]
         cmd += [bento]
         cmd += ["--working-dir", workdir]
+
+    if grpc:
+        cmd += ["--grpc", "--enable-reflection"]
+
     logger.info(f"Running command: `{cmd}`")
     p = subprocess.Popen(
         cmd,
@@ -246,13 +269,15 @@ def _start_mitm_proxy(port: int) -> None:
     from .utils import http_proxy_app
 
     logger.info(f"proxy serer listen on {port}")
-    uvicorn.run(http_proxy_app, port=port)  # type: ignore
+    uvicorn.run(http_proxy_app, port=port)  # type: ignore (not using ASGI3Application)
 
 
 @contextmanager
 def run_bento_server_distributed(
-    bento_tag: t.Union[str, "Tag"],
-    config_file: t.Optional[str] = None,
+    bento_tag: str | Tag,
+    config_file: str | None = None,
+    bentoml_home: str | None = None,
+    grpc: bool = False,
     timeout: float = 90,
 ):
     """
@@ -268,19 +293,24 @@ def run_bento_server_distributed(
     )
     proxy_process.start()
 
-    my_env = os.environ.copy()
+    copied = os.environ.copy()
 
     # to ensure yatai specified headers BP100
-    my_env["YATAI_BENTO_DEPLOYMENT_NAME"] = "sdfasdf"
-    my_env["YATAI_BENTO_DEPLOYMENT_NAMESPACE"] = "yatai"
-    my_env["HTTP_PROXY"] = f"http://127.0.0.1:{proxy_port}"
+    copied["YATAI_BENTO_DEPLOYMENT_NAME"] = "sdfasdf"
+    copied["YATAI_BENTO_DEPLOYMENT_NAMESPACE"] = "yatai"
+    copied["HTTP_PROXY"] = f"http://127.0.0.1:{proxy_port}"
 
     if config_file is not None:
-        my_env["BENTOML_CONFIG"] = os.path.abspath(config_file)
+        copied["BENTOML_CONFIG"] = os.path.abspath(config_file)
 
     import yaml
 
     import bentoml
+
+    if bentoml_home:
+        from bentoml._internal.configuration.containers import BentoMLContainer
+
+        BentoMLContainer.bentoml_home.set(bentoml_home)
 
     bento_service = bentoml.bentos.get(bento_tag)
 
@@ -317,29 +347,46 @@ def run_bento_server_distributed(
                 cmd,
                 encoding="utf-8",
                 stderr=subprocess.STDOUT,
-                env=my_env,
+                env=copied,
             )
         )
 
     with reserve_free_port() as server_port:
-        args_pairs = [
-            ("--remote-runner", f"{runner['name']}={runner_map[runner['name']]}")
-            for runner in bentofile["runners"]
-        ]
-        cmd = [
-            sys.executable,
-            "-m",
-            "bentoml",
-            "start-http-server",
-            str(bento_tag),
-            "--host",
-            "127.0.0.1",
-            "--port",
-            f"{server_port}",
-            "--working-dir",
-            path,
-            *itertools.chain.from_iterable(args_pairs),
-        ]
+        if grpc:
+            import json
+
+            bind = f"tcp://127.0.0.1:{server_port}"
+            copied["BENTOML_RUNNER_MAP"] = json.dumps(runner_map)
+            cmd = [
+                sys.executable,
+                "-m",
+                "bentoml_cli.server.grpc_api_server",
+                str(bento_tag),
+                "--bind",
+                bind,
+                "--working-dir",
+                path,
+                "--enable-reflection",
+            ]
+        else:
+            args_pairs = [
+                ("--remote-runner", f"{runner['name']}={runner_map[runner['name']]}")
+                for runner in bentofile["runners"]
+            ]
+            cmd = [
+                sys.executable,
+                "-m",
+                "bentoml",
+                "start-http-server",
+                str(bento_tag),
+                "--host",
+                "127.0.0.1",
+                "--port",
+                f"{server_port}",
+                "--working-dir",
+                path,
+                *itertools.chain.from_iterable(args_pairs),
+            ]
         logger.info(f"Running command: `{cmd}`")
 
     processes.append(
@@ -347,7 +394,7 @@ def run_bento_server_distributed(
             cmd,
             stderr=subprocess.STDOUT,
             encoding="utf-8",
-            env=my_env,
+            env=copied,
         )
     )
     try:
@@ -363,12 +410,16 @@ def run_bento_server_distributed(
         proxy_process.join()
 
 
-@cached_contextmanager("{bento}, {project_path}, {config_file}, {deployment_mode}")
+@cached_contextmanager(
+    "{bento_name}, {project_path}, {config_file}, {deployment_mode}, {bentoml_home}, {grpc}"
+)
 def host_bento(
-    bento: t.Union[str, Tag, None] = None,
+    bento_name: t.Union[str, Tag, None] = None,
     project_path: str = ".",
     config_file: str | None = None,
     deployment_mode: str = "standalone",
+    bentoml_home: str | None = None,
+    grpc: bool = False,
     clean_context: contextlib.ExitStack | None = None,
 ) -> t.Generator[str, None, None]:
     """
@@ -380,8 +431,8 @@ def host_bento(
         config_file: the path to the config file
         deployment_mode: the deployment mode, one of `standalone`, `docker` or `distributed`
         clean_context: a contextlib.ExitStack to clean up the intermediate files,
-            like docker image and bentos. If None, it will be created. Used for reusing
-            those files in the same test session.
+                       like docker image and bentos. If None, it will be created. Used for reusing
+                       those files in the same test session.
     """
     import bentoml
 
@@ -393,33 +444,39 @@ def host_bento(
 
     try:
         logger.info(
-            f"starting bento server {bento} at {project_path} "
+            f"starting bento server {bento_name} at {project_path} "
             f"with config file {config_file} "
             f"in {deployment_mode} mode..."
         )
-        if bento is None or not bentoml.list(bento):
-            bento_tag = clean_context.enter_context(bentoml_build(project_path))
+        if bento_name is None or not bentoml.list(bento_name):
+            bento = clean_context.enter_context(
+                bentoml_build(project_path, bentoml_home=bentoml_home)
+            )
         else:
-            bento_tag = bentoml.get(bento).tag
+            bento = bentoml.get(bento_name)
+
+        bento_tag = bento.tag
 
         if deployment_mode == "docker":
-            image_tag = clean_context.enter_context(bentoml_containerize(bento_tag))
-            with run_bento_server_in_docker(  # pylint: disable=not-context-manager # cached_contextmanager not detected by pylint
-                image_tag,
-                config_file,
-            ) as host:
+            image_tag = clean_context.enter_context(
+                bentoml_containerize(bento_tag, bentoml_home=bentoml_home)
+            )
+            with run_bento_server_in_docker(image_tag, config_file, grpc=grpc) as host:
                 yield host
         elif deployment_mode == "standalone":
             with run_bento_server(
-                str(bento_tag),
+                bento.path,
                 config_file=config_file,
                 workdir=project_path,
+                grpc=grpc,
             ) as host:
                 yield host
         elif deployment_mode == "distributed":
             with run_bento_server_distributed(
-                str(bento_tag),
+                bento.path,
                 config_file=config_file,
+                grpc=grpc,
+                bentoml_home=bentoml_home,
             ) as host:
                 yield host
         else:

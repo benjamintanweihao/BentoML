@@ -59,6 +59,7 @@ exclude = '''
     | dist
     | typings
     | bentoml/grpc
+    | tests/e2e/bento_server_grpc
   )/
   | bentoml/_version.py
 )
@@ -174,7 +175,7 @@ score = true
 valid-metaclass-classmethod-first-arg = ["cls", "mcls", "kls"]
 
 [tool.pylint.logging]
-logging-format-style = "new" # using f-string formatter for logging.
+logging-format-style = "old" # using %s formatter for logging (performance-related)
 
 [tool.pylint.miscellaneous]
 notes = ["FIXME", "XXX", "TODO", "NOTE", "WARNING"]

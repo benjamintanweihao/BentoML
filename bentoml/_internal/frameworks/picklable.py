@@ -13,7 +13,6 @@ from bentoml.models import Model
 from bentoml.models import ModelContext
 from bentoml.exceptions import NotFound
 from bentoml.exceptions import BentoMLException
-from bentoml.exceptions import MissingDependencyException
 
 from ..models import PKL_EXT
 from ..models import SAVE_NAMESPACE

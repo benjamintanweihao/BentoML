@@ -318,8 +318,16 @@ Run given tests after defining a target under `scripts/ci/config.yml` with `run_
 ### E2E tests
 
 ```bash
-# example: run e2e tests to check for general features
-./scripts/ci/run_tests.sh general_features
+# example: run e2e tests to check for http general features
+./scripts/ci/run_tests.sh http_server
+```
+
+### Running the whole suite
+
+To run the whole test suite, minus frameworks integration, you can use:
+
+```bash
+make tests-suite
 ```
 
 ### Adding new test suite
@@ -379,8 +387,8 @@ Example:
 
 ```yaml
 # e2e tests
-general_features:
-  root_test_dir: "tests/e2e/bento_server_general_features"
+http:
+  root_test_dir: "tests/e2e/bento_server_http"
   is_dir: true
   type_tests: "e2e"
   dependencies:

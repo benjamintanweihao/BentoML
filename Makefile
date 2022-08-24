@@ -34,7 +34,7 @@ ci-format: ci-black ci-isort ## Running format check in CI: black, isort
 ci-lint: ci-pylint ## Running lint check in CI: pylint
 
 .PHONY: tests-suite
-tests-suite: tests-unit tests-general_features ## Running BentoML tests suite (unit, e2e, integration)
+tests-suite: tests-unit tests-http_server tests-grpc_server ## Running BentoML tests suite (unit, e2e, integration)
 
 tests-%:
 	$(eval type :=$(subst tests-, , $@))

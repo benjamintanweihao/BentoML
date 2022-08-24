@@ -25,7 +25,7 @@ from ..service.openapi.specification import RequestBody
 if TYPE_CHECKING:
     import numpy as np
 
-    from bentoml.grpc.v1 import service_pb2 as pb
+    from bentoml.grpc.v1alpha1 import service_pb2 as pb
 
     from .. import external_typing as ext
     from ..context import InferenceApiContext as Context

@@ -20,13 +20,13 @@ from ....configuration.containers import BentoMLContainer
 START_TIME_VAR: contextvars.ContextVar[float] = contextvars.ContextVar("START_TIME_VAR")
 
 if TYPE_CHECKING:
-    from bentoml.grpc.v1 import service_pb2 as pb
     from bentoml.grpc.types import Request
     from bentoml.grpc.types import Response
     from bentoml.grpc.types import RpcMethodHandler
     from bentoml.grpc.types import AsyncHandlerMethod
     from bentoml.grpc.types import HandlerCallDetails
     from bentoml.grpc.types import BentoServicerContext
+    from bentoml.grpc.v1alpha1 import service_pb2 as pb
 
     from ....service import Service
     from ...metrics.prometheus import PrometheusClient

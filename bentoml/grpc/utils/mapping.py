@@ -16,8 +16,8 @@ if TYPE_CHECKING:
     import grpc
     import numpy as np
 
-    from bentoml.grpc.v1 import service_pb2 as pb
     from bentoml._internal import external_typing as ext
+    from bentoml.grpc.v1alpha1 import service_pb2 as pb
 else:
     from bentoml.grpc.utils._import_hook import import_generated_stubs
 

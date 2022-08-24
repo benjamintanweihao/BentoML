@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 PROMETHEUS_MESSAGE = (
-    "Prometheus metrics for %s BentoServer of '%s' can be accessed at '%s'."
+    'Prometheus metrics for %s BentoServer from "%s" can be accessed at %s.'
 )
 
 SCRIPT_RUNNER = "bentoml_cli.worker.runner"
@@ -302,8 +302,8 @@ def serve_development(
 
             logger.info(
                 PROMETHEUS_MESSAGE,
-                bento_identifier,
                 "gRPC",
+                bento_identifier,
                 f"http://{metrics_host}:{metrics_port}",
             )
     else:
@@ -342,8 +342,8 @@ def serve_development(
         )
         logger.info(
             PROMETHEUS_MESSAGE,
-            bento_identifier,
             "HTTP",
+            bento_identifier,
             f"http://{host}:{port}/metrics",
         )
 
@@ -439,7 +439,7 @@ def serve_production(
             )
         if psutil.MACOS or psutil.FREEBSD:
             logger.warning(
-                f"Due to gRPC implementation on exposing SO_REUSEPORT, '--production' behaviour on %s is not correct. We recommend to containerize BentoServer as a Linux container instead.",
+                "Due to gRPC implementation on exposing SO_REUSEPORT, '--production' behaviour on %s is not correct. We recommend to containerize BentoServer as a Linux container instead.",
                 "MacOS" if psutil.MACOS else "FreeBSD",
             )
 
@@ -602,8 +602,8 @@ def serve_production(
             )
             logger.info(
                 PROMETHEUS_MESSAGE,
-                bento_identifier,
                 "gRPC",
+                bento_identifier,
                 f"http://{metrics_host}:{metrics_port}",
             )
     else:
@@ -650,8 +650,8 @@ def serve_production(
 
         logger.info(
             PROMETHEUS_MESSAGE,
-            bento_identifier,
             "HTTP",
+            bento_identifier,
             f"http://{host}:{port}/metrics",
         )
 

@@ -28,13 +28,13 @@ from ..service.openapi.specification import RequestBody
 if TYPE_CHECKING:
     import pandas as pd
 
-    from bentoml.grpc.v1 import service_pb2 as pb
+    from bentoml.grpc.v1alpha1 import service_pb2 as pb
 
     from .. import external_typing as ext
     from ..context import InferenceApiContext as Context
 
 else:
-    pb = LazyLoader("pb", globals(), "bentoml.grpc.v1.service_pb2")
+    pb = LazyLoader("pb", globals(), "bentoml.grpc.v1alpha1.service_pb2")
     pd = LazyLoader(
         "pd",
         globals(),

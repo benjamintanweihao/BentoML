@@ -1,16 +1,16 @@
 syntax = "proto3";
 
-package bentoml.grpc.v1;
+package bentoml.grpc.v1alpha1;
 
 import "google/protobuf/struct.proto";
 import "google/protobuf/wrappers.proto";
 
 // cc_enable_arenas pre-allocate memory for given message to improve speed. (C++ only)
 option cc_enable_arenas = true;
-option go_package = "github.com/bentoml/grpc/v1";
+option go_package = "github.com/bentoml/grpc/v1alpha1";
 option java_multiple_files = true;
 option java_outer_classname = "ServiceProto";
-option java_package = "com.bentoml.grpc.v1";
+option java_package = "com.bentoml.grpc.v1alpha1";
 option objc_class_prefix = "SVC";
 option py_generic_services = true;
 
