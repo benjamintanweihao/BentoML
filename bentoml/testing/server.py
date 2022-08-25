@@ -17,6 +17,7 @@ import multiprocessing
 from typing import TYPE_CHECKING
 from contextlib import contextmanager
 
+from bentoml.testing.grpc import grpc_server_warmup
 from bentoml._internal.tag import Tag
 from bentoml._internal.utils import reserve_free_port
 from bentoml._internal.utils import cached_contextmanager
@@ -77,7 +78,7 @@ async def async_request(
     return r.status, Headers(headers), r_body
 
 
-def _wait_until_api_server_ready(
+def http_server_warmup(
     host_url: str,
     timeout: float,
     check_interval: float = 1,
@@ -100,7 +101,7 @@ def _wait_until_api_server_ready(
             urllib.error.URLError,
             socket.timeout,
         ) as e:
-            logger.info(f"[{e}]retrying to connect to the host {host_url}...")
+            logger.info(f"[{e}] retrying to connect to the host {host_url}...")
             logger.error(e)
             time.sleep(check_interval)
     logger.info(
@@ -193,11 +194,12 @@ def run_bento_server_in_docker(
     if grpc:
         prom_port = BentoMLContainer.grpc.metrics.port.get()
         cmd.extend(["-p", f"{prom_port}:{prom_port}"])
+        cmd.extend(["--env", "BENTOML_USE_GRPC=true"])
 
     cmd.append(image_tag)
 
     if grpc:
-        cmd.extend(["--grpc", "--enable-reflection"])
+        cmd.extend(["--enable-reflection"])
 
     logger.info(f"Running API server docker image: {cmd}")
     with subprocess.Popen(
@@ -207,7 +209,9 @@ def run_bento_server_in_docker(
     ) as proc:
         try:
             host_url = f"127.0.0.1:{port}"
-            if _wait_until_api_server_ready(host_url, timeout, popen=proc):
+            if grpc and grpc_server_warmup(host_url, timeout, popen=proc):
+                yield host_url
+            elif http_server_warmup(host_url, timeout, popen=proc):
                 yield host_url
             else:
                 raise RuntimeError(
@@ -244,7 +248,7 @@ def run_bento_server(
         cmd += ["--working-dir", workdir]
 
     if grpc:
-        cmd += ["--grpc", "--enable-reflection"]
+        cmd += ["--enable-reflection"]
 
     logger.info(f"Running command: `{cmd}`")
     p = subprocess.Popen(
@@ -256,7 +260,10 @@ def run_bento_server(
 
     try:
         host_url = f"127.0.0.1:{port}"
-        assert _wait_until_api_server_ready(host_url, timeout=timeout, popen=p)
+        if grpc:
+            assert grpc_server_warmup(host_url, timeout=timeout, popen=p)
+        else:
+            assert http_server_warmup(host_url, timeout=timeout, popen=p)
         yield host_url
     finally:
         kill_subprocess_tree(p)
@@ -296,7 +303,7 @@ def run_bento_server_distributed(
     copied = os.environ.copy()
 
     # to ensure yatai specified headers BP100
-    copied["YATAI_BENTO_DEPLOYMENT_NAME"] = "sdfasdf"
+    copied["YATAI_BENTO_DEPLOYMENT_NAME"] = "test-deployment"
     copied["YATAI_BENTO_DEPLOYMENT_NAMESPACE"] = "yatai"
     copied["HTTP_PROXY"] = f"http://127.0.0.1:{proxy_port}"
 
@@ -399,7 +406,7 @@ def run_bento_server_distributed(
     )
     try:
         host_url = f"127.0.0.1:{server_port}"
-        _wait_until_api_server_ready(host_url, timeout=timeout)
+        http_server_warmup(host_url, timeout=timeout)
         yield host_url
     finally:
         for p in processes:

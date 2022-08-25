@@ -82,7 +82,7 @@ async def async_request(
 
 def check_headers(headers: multidict.CIMultiDict[str]) -> bool:
     return (
-        headers.get("Yatai-Bento-Deployment-Name") == "sdfasdf"
+        headers.get("Yatai-Bento-Deployment-Name") == "test-deployment"
         and headers.get("Yatai-Bento-Deployment-Namespace") == "yatai"
     )
 

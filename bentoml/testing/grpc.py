@@ -7,6 +7,8 @@ from contextlib import asynccontextmanager
 from bentoml._internal.utils import LazyLoader
 
 if TYPE_CHECKING:
+    from subprocess import Popen
+
     import numpy as np
     from grpc import aio
     from numpy.typing import NDArray  # pylint: disable=unused-import
@@ -44,6 +46,12 @@ async def async_client_call(
         else:
             assert output == assert_data, f"Failed while checking data: {output}"
     return output
+
+
+def grpc_server_warmup(
+    host_url: str, timeout: float, popen: Popen[t.Any] | None = None
+) -> bool:
+    return True
 
 
 @asynccontextmanager

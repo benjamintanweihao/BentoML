@@ -413,6 +413,7 @@ def containerize(
 ) -> bool:
 
     from bentoml._internal.utils import buildx
+    import psutil
 
     env = {"DOCKER_BUILDKIT": "1", "DOCKER_SCAN_SUGGEST": "false"}
 
@@ -423,6 +424,12 @@ def containerize(
     dockerfile_path = os.path.join("env", "docker", "Dockerfile")
 
     logger.info(f"Building docker image for {bento}...")
+    if platform != "linux/amd64" and not psutil.LINUX:
+        logger.debug(
+            'Current platform is set to "%s". By default BentoML will set target build platform to the current machine platform via "uname -m". To avoid issue, we recommend you to build the container with x86_64 (amd64): "bentoml containerize %s --platform linux/amd64"',
+            platform,
+            str(bento.tag),
+        )
     try:
         buildx.build(
             subprocess_env=env,
@@ -459,20 +466,19 @@ def containerize(
         )
     except subprocess.CalledProcessError as e:
         logger.error(f"Failed building docker image: {e}")
-        if platform != "linux/amd64":
-            logger.debug(
-                f"""If you run into the following error: "failed to solve: pull access denied, repository does not exist or may require authorization: server message: insufficient_scope: authorization failed". This means Docker doesn't have context of your build platform {platform}. By default BentoML will set target build platform to the current machine platform via `uname -m`. Try again by specifying to build x86_64 (amd64) platform: bentoml containerize {str(bento.tag)} --platform linux/amd64"""
-            )
         return False
     else:
+        grpc_metrics_port = BentoMLContainer.grpc.metrics.port.get()
         logger.info(
             'Successfully built docker image for "%s" with tags "%s"',
             str(bento.tag),
             ",".join(docker_image_tag),
         )
         logger.info(
-            'To run your newly built Bento container, use one of the above tags, and pass it to "docker run". i.e: "docker run -it --rm -p 3000:3000 %s"',
+            'To run your newly built Bento container, use one of the above tags, and pass it to "docker run". i.e: "docker run -it --rm -p 3000:3000 %s". To use gRPC, pass "-e BENTOML_USE_GRPC=true -p %s:%s" to "docker run".',
             docker_image_tag[0],
+            grpc_metrics_port,
+            grpc_metrics_port,
         )
         return True
 
