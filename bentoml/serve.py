@@ -455,7 +455,7 @@ def serve_http_production(
         try:
             arbiter.start(
                 cb=lambda _: logger.info(  # type: ignore
-                    f'Starting production %s BentoServer from "%s" running on http://%s:%d (Press CTRL+C to quit)',
+                    'Starting production %s BentoServer from "%s" running on http://%s:%d (Press CTRL+C to quit)',
                     "HTTP",
                     bento_identifier,
                     host,
@@ -862,7 +862,7 @@ def serve_grpc_production(
         try:
             arbiter.start(
                 cb=lambda _: logger.info(  # type: ignore
-                    f'Starting production %s BentoServer from "%s" running on http://%s:%d (Press CTRL+C to quit)',
+                    'Starting production %s BentoServer from "%s" running on http://%s:%d (Press CTRL+C to quit)',
                     "gRPC",
                     bento_identifier,
                     host,

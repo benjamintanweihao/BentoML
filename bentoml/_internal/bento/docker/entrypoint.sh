@@ -26,6 +26,8 @@ _main() {
 			elif [ "${BENTOML_SERVE_COMPONENT}" = 'runner' ]; then
 				set -- bentoml start-runner-server "$@" "$BENTO_PATH"
 			fi
+		elif [[ -v BENTOML_USE_GRPC ]] && [ "${BENTOML_USE_GRPC}" = "true" ]; then
+			set -- bentoml serve-grpc --production "$@" "$BENTO_PATH"
 		else
 			set -- bentoml serve --production "$@" "$BENTO_PATH"
 		fi
