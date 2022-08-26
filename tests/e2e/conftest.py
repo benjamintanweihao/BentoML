@@ -11,8 +11,8 @@ from importlib import import_module
 import pytest
 from pytest import MonkeyPatch
 
-from bentoml._internal.utils import LazyLoader
 from bentoml.exceptions import InvalidArgument
+from bentoml._internal.utils import LazyLoader
 
 if TYPE_CHECKING:
 

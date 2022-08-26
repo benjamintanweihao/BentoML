@@ -107,6 +107,7 @@ SCHEMA = Schema(
         "api_server": {
             "workers": Or(And(int, _larger_than_zero), None),
             "timeout": And(int, _larger_than_zero),
+            "backlog": And(int, _larger_than(64)),
             Optional("ssl"): {
                 Optional("certfile"): Or(str, None),
                 Optional("keyfile"): Or(str, None),
@@ -138,7 +139,6 @@ SCHEMA = Schema(
             "http": {
                 "host": And(str, _is_ip_address),
                 "port": And(int, _larger_than_zero),
-                "backlog": And(int, _larger_than(64)),
                 "max_request_size": And(int, _larger_than_zero),
                 "cors": {
                     "enabled": bool,
@@ -151,7 +151,6 @@ SCHEMA = Schema(
                 },
             },
             Optional("grpc"): {
-                "enabled": bool,
                 "host": And(str, _is_ip_address),
                 "port": And(int, _larger_than_zero),
                 "metrics": {
@@ -234,7 +233,7 @@ class BentoMLConfiguration:
                 override_config: dict[str, t.Any] = yaml.safe_load(f)
 
             # compatibility layer with old configuration pre gRPC features
-            # api_server.[max_request_size|backlog|cors|port|host] -> api_server.http.$^
+            # api_server.[max_request_size|cors|port|host] -> api_server.http.$^
             if "api_server" in override_config:
                 user_api_config = override_config["api_server"]
                 # check if user are using older configuration
@@ -255,10 +254,6 @@ class BentoMLConfiguration:
                     logger.warning(
                         _WARNING_MESSAGE, "max_request_size", "max_request_size"
                     )
-                if "backlog" in user_api_config:
-                    user_backlog = user_api_config.pop("backlog")
-                    user_api_config["http"]["backlog"] = user_backlog
-                    logger.warning(_WARNING_MESSAGE, "backlog", "backlog")
                 if "cors" in user_api_config:
                     user_cors = user_api_config.pop("cors")
                     user_api_config["http"]["cors"] = user_cors
@@ -268,7 +263,7 @@ class BentoMLConfiguration:
 
                 assert all(
                     key not in override_config["api_server"]
-                    for key in ["cors", "backlog", "max_request_size", "host", "port"]
+                    for key in ["cors", "max_request_size", "host", "port"]
                 )
 
             config_merger.merge(self.config, override_config)
@@ -409,7 +404,6 @@ class _BentoMLContainerClass:
             host: providers.Static[str]
             port: providers.Static[int]
             max_request_size: providers.Static[int]
-            backlog: providers.Static[int]
 
             class _CorsConfiguration(_ConfigurationItem):
                 enabled: providers.Static[bool]
@@ -509,6 +503,7 @@ class _BentoMLContainerClass:
         from opentelemetry.sdk.environment_variables import OTEL_SERVICE_NAME
         from opentelemetry.sdk.environment_variables import OTEL_RESOURCE_ATTRIBUTES
 
+        from ...exceptions import InvalidArgument
         from ..utils.telemetry import ParentBasedTraceIdRatio
 
         if sample_rate is None:
@@ -540,10 +535,8 @@ class _BentoMLContainerClass:
             # pylint: disable=no-name-in-module # https://github.com/open-telemetry/opentelemetry-python-contrib/issues/290
             from opentelemetry.exporter.zipkin.json import ZipkinExporter
 
-            exporter = ZipkinExporter(  # type: ignore (no opentelemetry types)
-                endpoint=zipkin_server_url,
-            )
-            provider.add_span_processor(BatchSpanProcessor(exporter))  # type: ignore (no opentelemetry types)
+            exporter = ZipkinExporter(endpoint=zipkin_server_url)
+            provider.add_span_processor(BatchSpanProcessor(exporter))
             _check_sample_rate(sample_rate)
             return provider
         elif (
@@ -557,7 +550,7 @@ class _BentoMLContainerClass:
             exporter = JaegerExporter(
                 agent_host_name=jaeger_server_address, agent_port=jaeger_server_port
             )
-            provider.add_span_processor(BatchSpanProcessor(exporter))  # type: ignore (no opentelemetry types)
+            provider.add_span_processor(BatchSpanProcessor(exporter))
             _check_sample_rate(sample_rate)
             return provider
         elif (
@@ -576,11 +569,11 @@ class _BentoMLContainerClass:
                 from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
                     OTLPSpanExporter,  # type: ignore (no opentelemetry types)
                 )
+            else:
+                raise InvalidArgument(f"Invalid otlp protocol: {otlp_server_protocol}")
 
-            exporter = OTLPSpanExporter(  # type: ignore (no opentelemetry types)
-                endpoint=otlp_server_url,
-            )
-            provider.add_span_processor(BatchSpanProcessor(exporter))  # type: ignore (no opentelemetry types)
+            exporter = OTLPSpanExporter(endpoint=otlp_server_url)
+            provider.add_span_processor(BatchSpanProcessor(exporter))
             _check_sample_rate(sample_rate)
             return provider
         else:

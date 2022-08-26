@@ -7,7 +7,7 @@ import click
 
 @click.command()
 @click.argument("bento_identifier", type=click.STRING, required=False, default=".")
-@click.option("--bind", type=click.STRING, required=True)
+@click.option("--port", type=click.INT, required=False, default=None)
 @click.option("--working-dir", required=False, type=click.Path(), default=None)
 @click.option(
     "--enable-reflection",
@@ -24,16 +24,11 @@ import click
 )
 def main(
     bento_identifier: str,
-    bind: str,
+    port: int | None,
     working_dir: str | None,
     enable_reflection: bool,
     max_concurrent_streams: int | None,
 ):
-    from urllib.parse import urlparse
-
-    import psutil
-
-    from bentoml import load
     from bentoml._internal.log import configure_server_logging
     from bentoml._internal.context import component_context
 
@@ -41,7 +36,15 @@ def main(
 
     configure_server_logging()
 
+    import psutil
+
+    from bentoml import load
+    from bentoml._internal.configuration.containers import BentoMLContainer
+
     svc = load(bento_identifier, working_dir=working_dir, standalone_load=True)
+
+    if not port:
+        port = BentoMLContainer.grpc.port.get()
 
     # setup context
     if svc.tag is None:
@@ -56,23 +59,18 @@ def main(
 
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())  # type: ignore
 
-    parsed = urlparse(bind)
+    from bentoml._internal.server import grpc
 
-    if parsed.scheme == "tcp":
-        from bentoml._internal.server import grpc
+    grpc_options: dict[str, t.Any] = {"enable_reflection": enable_reflection}
+    if max_concurrent_streams:
+        grpc_options["max_concurrent_streams"] = int(max_concurrent_streams)
 
-        grpc_options: dict[str, t.Any] = {"enable_reflection": enable_reflection}
-        if max_concurrent_streams:
-            grpc_options["max_concurrent_streams"] = int(max_concurrent_streams)
-
-        config = grpc.Config(
-            svc.grpc_servicer,
-            bind_address=f"[::]:{parsed.port}",
-            **grpc_options,
-        )
-        grpc.Server(config).run()
-    else:
-        raise ValueError(f"Unsupported bind scheme: {bind}")
+    config = grpc.Config(
+        svc.grpc_servicer,
+        bind_address=f"[::]:{port}",
+        **grpc_options,
+    )
+    grpc.Server(config).run()
 
 
 if __name__ == "__main__":

@@ -2,19 +2,14 @@ from __future__ import annotations
 
 import json
 import typing as t
-from urllib.parse import urlparse
 
 import click
 
 
 @click.command()
 @click.argument("bento_identifier", type=click.STRING, required=False, default=".")
-@click.option(
-    "--bind",
-    type=click.STRING,
-    required=True,
-    help="Bind address sent to circus. This address accepts the following values: 'tcp://127.0.0.1:3000','unix:///tmp/bento_api.sock', 'fd://12'",
-)
+@click.option("--host", type=click.STRING, required=False, default=None)
+@click.option("--port", type=click.INT, required=False, default=None)
 @click.option(
     "--runner-map",
     type=click.STRING,
@@ -43,12 +38,13 @@ import click
 @click.option(
     "--max-concurrent-streams",
     type=click.INT,
-    help="Maximum number of concurrent incoming streams to allow on a http2 connection.",
+    help="Maximum number of concurrent incoming streams to allow on a HTTP2 connection.",
     default=None,
 )
 def main(
     bento_identifier: str,
-    bind: str,
+    host: str,
+    port: int,
     runner_map: str | None,
     working_dir: str | None,
     worker_id: int | None,
@@ -66,12 +62,11 @@ def main(
     from bentoml._internal.context import component_context
     from bentoml._internal.configuration.containers import BentoMLContainer
 
+    component_context.component_type = "grpc_api_server"
+    component_context.component_index = worker_id
     configure_server_logging()
 
     BentoMLContainer.development_mode.set(False)
-
-    component_context.component_name = f"grpc_api_server:{worker_id}"
-
     if runner_map is not None:
         BentoMLContainer.remote_runner_mapping.set(json.loads(runner_map))
 
@@ -85,17 +80,15 @@ def main(
         component_context.bento_name = svc.tag.name
         component_context.bento_version = svc.tag.version
 
-    parsed = urlparse(bind)
-    assert parsed.scheme == "tcp"
-
     from bentoml._internal.server import grpc
 
     grpc_options: dict[str, t.Any] = {"enable_reflection": enable_reflection}
     if max_concurrent_streams:
         grpc_options["max_concurrent_streams"] = int(max_concurrent_streams)
 
-    config = grpc.Config(svc.grpc_servicer, bind_address=parsed.netloc, **grpc_options)
-
+    config = grpc.Config(
+        svc.grpc_servicer, bind_address=f"{host}:{port}", **grpc_options
+    )
     grpc.Server(config).run()
 
 

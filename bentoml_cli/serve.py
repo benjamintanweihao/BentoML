@@ -51,7 +51,7 @@ def add_serve_command(cli: click.Group) -> None:
     @click.option(
         "--backlog",
         type=click.INT,
-        default=BentoMLContainer.http.backlog.get(),
+        default=BentoMLContainer.api_server_config.backlog.get(),
         help="The maximum number of pending connections.",
         show_default=True,
     )
@@ -112,26 +112,6 @@ def add_serve_command(cli: click.Group) -> None:
         default=None,
         help="Ciphers to use (see stdlib 'ssl' module)",
     )
-    @click.option(
-        "--grpc",
-        type=click.BOOL,
-        is_flag=True,
-        help="Start a BentoML gRPC server.",
-        default=BentoMLContainer.grpc.enabled.get(),
-    )
-    @click.option(
-        "--enable-reflection",
-        is_flag=True,
-        default=BentoMLContainer.grpc.reflection.enabled.get(),
-        type=click.BOOL,
-        help="Enable reflection (Currently, only have effect in conjunction with '--grpc').",
-    )
-    @click.option(
-        "--max-concurrent-streams",
-        default=BentoMLContainer.grpc.max_concurrent_streams.get(),
-        type=click.INT,
-        help="Maximum number of concurrent incoming streams to allow on a http2 connection.",
-    )
     def serve(  # type: ignore (unused warning)
         bento: str,
         production: bool,
@@ -148,11 +128,8 @@ def add_serve_command(cli: click.Group) -> None:
         ssl_cert_reqs: int | None,
         ssl_ca_certs: str | None,
         ssl_ciphers: str | None,
-        grpc: bool,
-        enable_reflection: bool,
-        max_concurrent_streams: int | None,
     ) -> None:
-        """Start a :code:`BentoServer` from a given ``BENTO`` 🍱
+        """Start a HTTP BentoServer from a given 🍱
 
         ``BENTO`` is the serving target, it can be the import as:
             - the import path of a :code:`bentoml.Service` instance
@@ -194,9 +171,9 @@ def add_serve_command(cli: click.Group) -> None:
                     "'--reload' is not supported with '--production'; ignoring"
                 )
 
-            from bentoml.serve import serve_production
+            from bentoml.serve import serve_http_production
 
-            serve_production(
+            serve_http_production(
                 bento,
                 working_dir=working_dir,
                 port=port,
@@ -210,18 +187,15 @@ def add_serve_command(cli: click.Group) -> None:
                 ssl_cert_reqs=ssl_cert_reqs,
                 ssl_ca_certs=ssl_ca_certs,
                 ssl_ciphers=ssl_ciphers,
-                grpc=grpc,
-                reflection=enable_reflection,
-                max_concurrent_streams=max_concurrent_streams,
             )
         else:
-            from bentoml.serve import serve_development
+            from bentoml.serve import serve_http_development
 
-            serve_development(
+            serve_http_development(
                 bento,
                 working_dir=working_dir,
                 port=port,
-                host=DEFAULT_DEV_SERVER_HOST if host is None else host,
+                host=DEFAULT_DEV_SERVER_HOST if not host else host,
                 reload=reload,
                 ssl_keyfile=ssl_keyfile,
                 ssl_certfile=ssl_certfile,
@@ -230,7 +204,147 @@ def add_serve_command(cli: click.Group) -> None:
                 ssl_cert_reqs=ssl_cert_reqs,
                 ssl_ca_certs=ssl_ca_certs,
                 ssl_ciphers=ssl_ciphers,
-                grpc=grpc,
-                reflection=enable_reflection,
+            )
+
+    @cli.command(name="serve-grpc")
+    @click.argument("bento", type=click.STRING, default=".")
+    @click.option(
+        "--production",
+        type=click.BOOL,
+        help="Run the BentoServer in production mode",
+        is_flag=True,
+        default=False,
+        show_default=True,
+    )
+    @click.option(
+        "-p",
+        "--port",
+        type=click.INT,
+        default=BentoMLContainer.grpc.port.get(),
+        help="The port to listen on for the REST api server",
+        envvar="BENTOML_PORT",
+        show_default=True,
+    )
+    @click.option(
+        "--host",
+        type=click.STRING,
+        default=BentoMLContainer.grpc.host.get(),
+        help="The host to bind for the gRPC server, default to 0.0.0.0",
+        envvar="BENTOML_HOST",
+    )
+    @click.option(
+        "--api-workers",
+        type=click.INT,
+        default=None,
+        help="Specify the number of API server workers to start. Default to number of available CPU cores in production mode",
+        envvar="BENTOML_API_WORKERS",
+    )
+    @click.option(
+        "--reload",
+        type=click.BOOL,
+        is_flag=True,
+        help="Reload Service when code changes detected, this is only available in development mode",
+        default=False,
+        show_default=True,
+    )
+    @click.option(
+        "--backlog",
+        type=click.INT,
+        default=BentoMLContainer.api_server_config.backlog.get(),
+        help="The maximum number of pending connections.",
+        show_default=True,
+    )
+    @click.option(
+        "--working-dir",
+        type=click.Path(),
+        help="When loading from source code, specify the directory to find the Service instance",
+        default=".",
+        show_default=True,
+    )
+    @click.option(
+        "--enable-reflection",
+        is_flag=True,
+        default=BentoMLContainer.grpc.reflection.enabled.get(),
+        type=click.BOOL,
+        help="Enable reflection (Currently, only have effect in conjunction with '--grpc').",
+    )
+    @click.option(
+        "--max-concurrent-streams",
+        default=BentoMLContainer.grpc.max_concurrent_streams.get(),
+        type=click.INT,
+        help="Maximum number of concurrent incoming streams to allow on a http2 connection.",
+    )
+    def serve_grpc(  # type: ignore (unused warning)
+        bento: str,
+        production: bool,
+        port: int,
+        host: str,
+        api_workers: int | None,
+        backlog: int,
+        reload: bool,
+        working_dir: str,
+        enable_reflection: bool,
+        max_concurrent_streams: int | None,
+    ):
+        """Start a gRPC BentoServer from a given 🍱
+
+        ``BENTO`` is the serving target, it can be the import as:
+            - the import path of a :code:`bentoml.Service` instance
+            - a tag to a Bento in local Bento store
+            - a folder containing a valid `bentofile.yaml` build file with a `service` field, which provides the import path of a :code:`bentoml.Service` instance
+            - a path to a built Bento (for internal & debug use only)
+
+        e.g.:
+
+        \b
+        Serve from a bentoml.Service instance source code (for development use only):
+            :code:`bentoml serve-grpc fraud_detector.py:svc`
+
+        \b
+        Serve from a Bento built in local store:
+            :code:`bentoml serve-grpc fraud_detector:4tht2icroji6zput3suqi5nl2`
+            :code:`bentoml serve-grpc fraud_detector:latest`
+
+        \b
+        Serve from a Bento directory:
+            :code:`bentoml serve-grpc ./fraud_detector_bento`
+
+        \b
+        If :code:`--reload` is provided, BentoML will detect code and model store changes during development, and restarts the service automatically.
+
+            The `--reload` flag will:
+            - be default, all file changes under `--working-dir` (default to current directory) will trigger a restart
+            - when specified, respect :obj:`include` and :obj:`exclude` under :obj:`bentofile.yaml` as well as the :obj:`.bentoignore` file in `--working-dir`, for code and file changes
+            - all model store changes will also trigger a restart (new model saved or existing model removed)
+        """
+        configure_server_logging()
+        if production:
+            if reload:
+                logger.warning(
+                    "'--reload' is not supported with '--production'; ignoring"
+                )
+
+            from bentoml.serve import serve_grpc_production
+
+            serve_grpc_production(
+                bento,
+                working_dir=working_dir,
+                port=port,
+                backlog=backlog,
+                host=host,
+                api_workers=api_workers,
                 max_concurrent_streams=max_concurrent_streams,
+                reflection=enable_reflection,
+            )
+        else:
+            from bentoml.serve import serve_grpc_development
+
+            serve_grpc_development(
+                bento,
+                working_dir=working_dir,
+                port=port,
+                backlog=backlog,
+                host=BentoMLContainer.grpc.host.get() if not host else host,
+                max_concurrent_streams=max_concurrent_streams,
+                reflection=enable_reflection,
             )

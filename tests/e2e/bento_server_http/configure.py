@@ -5,7 +5,7 @@ import bentoml
 
 def create_model():
     bentoml.picklable_model.save_model(
-        "py_model.case-1.e2e",
+        "py_model.case-1.http.e2e",
         pickle_model.PickleModel(),
         signatures={
             "predict_file": {"batchable": True},

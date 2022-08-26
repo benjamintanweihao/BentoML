@@ -29,14 +29,11 @@ def fixture_config_cls(tmp_path: Path) -> t.Callable[[str], ConfigDictType]:
 def test_backward_configuration(config_cls: t.Callable[[str], ConfigDictType]):
     OLD_CONFIG = """\
 api_server:
-    backlog: 4096
     max_request_size: 8624612341
 """
     bentoml_cfg = config_cls(OLD_CONFIG)
-    assert "backlog" not in bentoml_cfg["api_server"]
     assert "max_request_size" not in bentoml_cfg["api_server"]
     assert "cors" not in bentoml_cfg["api_server"]
-    assert bentoml_cfg["api_server"]["http"]["backlog"] == 4096
     assert bentoml_cfg["api_server"]["http"]["max_request_size"] == 8624612341
 
 
@@ -70,15 +67,6 @@ api_server:
     with caplog.at_level(logging.WARNING):
         config_cls(OLD_MAX_REQUEST_SIZE)
     assert "field 'api_server.max_request_size' is deprecated" in caplog.text
-    caplog.clear()
-
-    OLD_BACKLOG = """\
-api_server:
-    backlog: 4096
-"""
-    with caplog.at_level(logging.WARNING):
-        config_cls(OLD_BACKLOG)
-    assert "field 'api_server.backlog' is deprecated" in caplog.text
     caplog.clear()
 
     OLD_CORS = """\
