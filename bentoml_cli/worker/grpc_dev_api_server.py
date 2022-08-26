@@ -7,6 +7,7 @@ import click
 
 @click.command()
 @click.argument("bento_identifier", type=click.STRING, required=False, default=".")
+@click.option("--host", type=click.STRING, required=False, default=None)
 @click.option("--port", type=click.INT, required=False, default=None)
 @click.option("--working-dir", required=False, type=click.Path(), default=None)
 @click.option(
@@ -24,27 +25,27 @@ import click
 )
 def main(
     bento_identifier: str,
-    port: int | None,
+    host: str,
+    port: int,
     working_dir: str | None,
     enable_reflection: bool,
     max_concurrent_streams: int | None,
 ):
-    from bentoml._internal.log import configure_server_logging
-    from bentoml._internal.context import component_context
-
-    component_context.component_name = "grpc_dev_api_server"
-
-    configure_server_logging()
-
     import psutil
 
     from bentoml import load
+    from bentoml._internal.log import configure_server_logging
+    from bentoml._internal.context import component_context
     from bentoml._internal.configuration.containers import BentoMLContainer
 
-    svc = load(bento_identifier, working_dir=working_dir, standalone_load=True)
+    component_context.component_type = "grpc_dev_api_server"
+    configure_server_logging()
 
+    svc = load(bento_identifier, working_dir=working_dir, standalone_load=True)
     if not port:
         port = BentoMLContainer.grpc.port.get()
+    if not host:
+        host = BentoMLContainer.grpc.host.get()
 
     # setup context
     if svc.tag is None:
@@ -53,7 +54,6 @@ def main(
     else:
         component_context.bento_name = svc.tag.name
         component_context.bento_version = svc.tag.version
-
     if psutil.WINDOWS:
         import asyncio
 
@@ -65,12 +65,9 @@ def main(
     if max_concurrent_streams:
         grpc_options["max_concurrent_streams"] = int(max_concurrent_streams)
 
-    config = grpc.Config(
-        svc.grpc_servicer,
-        bind_address=f"[::]:{port}",
-        **grpc_options,
-    )
-    grpc.Server(config).run()
+    grpc.Server(
+        grpc.Config(svc.grpc_servicer, bind_address=f"{host}:{port}", **grpc_options)
+    ).run()
 
 
 if __name__ == "__main__":

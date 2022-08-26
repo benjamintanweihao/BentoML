@@ -83,7 +83,7 @@ def main(
     from bentoml._internal.context import component_context
     from bentoml._internal.configuration.containers import BentoMLContainer
 
-    component_context.component_type = "dev_api_server"
+    component_context.component_type = "http_dev_api_server"
     configure_server_logging()
 
     if prometheus_dir is not None:

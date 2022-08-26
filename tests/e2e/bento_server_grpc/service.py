@@ -4,8 +4,9 @@ import typing as t
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
+from _servicer import TestServiceServicer
 from PIL.Image import fromarray
-from servicer_impl import TestServiceServicer
+from _interceptor import AsyncContextInterceptor
 
 import bentoml
 from bentoml.io import File
@@ -65,6 +66,8 @@ svc.mount_grpc_servicer(
     add_servicer_fn=services_test.add_TestServiceServicer_to_server,
     service_names=services_name,
 )
+
+svc.add_grpc_interceptor(AsyncContextInterceptor, usage="NLP", accuracy_score=0.8247)
 
 
 @svc.api(input=JSON(), output=JSON())

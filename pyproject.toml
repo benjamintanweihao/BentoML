@@ -188,7 +188,6 @@ never-returning-functions = ["sys.exit"]
 spelling-ignore-comment-directives = "fmt: on,fmt: off,noqa:,noqa,nosec,isort:skip,mypy:,pylint:,type:"
 
 [tool.pylint.variables]
-allowed-redefined-builtins = ["create_bento_servicer.BentoServiceServicer.Call"]
 init-import = true
 
 [tool.isort]

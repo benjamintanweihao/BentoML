@@ -226,6 +226,12 @@ def serve_http_development(
             close_child_stdin=False,
         )
     )
+    logger.info(
+        PROMETHEUS_MESSAGE,
+        "HTTP",
+        bento_identifier,
+        f"http://{host}:{port}/metrics",
+    )
 
     plugins = []
     if reload:
@@ -257,12 +263,6 @@ def serve_http_development(
     )
 
     with track_serve(svc, production=False):
-        logger.info(
-            PROMETHEUS_MESSAGE,
-            "HTTP",
-            bento_identifier,
-            f"http://{host}:{port}/metrics",
-        )
         arbiter.start(
             cb=lambda _: logger.info(  # type: ignore
                 'Starting development %s BentoServer from "%s" running on http://%s:%d (Press CTRL+C to quit)',
@@ -467,26 +467,6 @@ def serve_http_production(
                 shutil.rmtree(uds_path)
 
 
-@contextlib.contextmanager
-def enable_so_reuseport(host: str, port: int) -> t.Generator[int, None, None]:
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    if psutil.WINDOWS:
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    elif psutil.MACOS or psutil.FREEBSD:
-        sock.setsockopt(socket.SOL_SOCKET, 0x10000, 1)  # SO_REUSEPORT_LB
-    else:
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-
-        if sock.getsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT) == 0:
-            raise RuntimeError("Failed to set SO_REUSEPORT.")
-
-    sock.bind((host, port))
-    try:
-        yield sock.getsockname()[1]
-    finally:
-        sock.close()
-
-
 @inject
 def serve_grpc_development(
     bento_identifier: str,
@@ -505,6 +485,7 @@ def serve_grpc_development(
     from bentoml import load
 
     from ._internal.log import SERVER_LOGGING_CONFIG
+    from ._internal.utils import reserve_free_port
     from ._internal.utils.circus import create_standalone_arbiter
     from ._internal.utils.analytics import track_serve
 
@@ -525,14 +506,18 @@ def serve_grpc_development(
         log_grpcui_message(port)
 
     with contextlib.ExitStack() as port_stack:
-        enabled_port = port_stack.enter_context(enable_so_reuseport(host, port))
+        api_port = port_stack.enter_context(
+            reserve_free_port(host, port=port, enable_so_reuseport=True)
+        )
 
         args = [
             "-m",
             SCRIPT_GRPC_DEV_API_SERVER,
             bento_identifier,
+            "--host",
+            host,
             "--port",
-            str(enabled_port),
+            str(api_port),
             "--working-dir",
             working_dir,
         ]
@@ -547,6 +532,7 @@ def serve_grpc_development(
                 ]
             )
 
+        # use circus_sockets. CircusSocket support for SO_REUSEPORT
         watchers.append(
             create_watcher(
                 name="grpc_dev_api_server",
@@ -602,6 +588,7 @@ def serve_grpc_development(
         )
 
     plugins = []
+
     if reload:
         if sys.platform == "win32":
             logger.warning(
@@ -627,7 +614,7 @@ def serve_grpc_development(
         plugins=plugins,
         debug=True if sys.platform != "win32" else False,
         loggerconfig=SERVER_LOGGING_CONFIG,
-        loglevel="WARNING",
+        loglevel="ERROR",
     )
 
     with track_serve(svc, production=False):
@@ -777,7 +764,9 @@ def serve_grpc_production(
         log_grpcui_message(port)
 
     with contextlib.ExitStack() as port_stack:
-        api_port = port_stack.enter_context(enable_so_reuseport(host, port))
+        api_port = port_stack.enter_context(
+            reserve_free_port(host, port=port, enable_so_reuseport=True)
+        )
         args = [
             "-m",
             SCRIPT_GRPC_API_SERVER,
@@ -841,9 +830,6 @@ def serve_grpc_production(
                 working_dir=working_dir,
                 numprocesses=1,
                 singleton=True,
-                # we don't want to close stdin for child process in case user use debugger.
-                # See https://circus.readthedocs.io/en/latest/for-ops/configuration/
-                close_child_stdin=False,
             )
         )
 
@@ -853,7 +839,6 @@ def serve_grpc_production(
             bento_identifier,
             f"http://{metrics_host}:{metrics_port}",
         )
-
     arbiter = create_standalone_arbiter(
         watchers=watchers, sockets=list(circus_socket_map.values())
     )

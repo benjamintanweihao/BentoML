@@ -258,6 +258,8 @@ class Service:
     def add_grpc_interceptor(
         self, interceptor_cls: t.Type[grpc.aio.ServerInterceptor], **options: t.Any
     ) -> None:
+        import grpc
+
         from bentoml.exceptions import BadInput
 
         if not issubclass(interceptor_cls, grpc.aio.ServerInterceptor):
@@ -278,7 +280,7 @@ class Service:
                     f"{interceptor_cls} is not a subclass of 'grpc.aio.ServerInterceptor'."
                 )
 
-        self.interceptors.append(partial(interceptor_cls, options))
+        self.interceptors.append(partial(interceptor_cls, **options))
 
     def add_grpc_handlers(self, handlers: list[grpc.GenericRpcHandler]) -> None:
         self.grpc_handlers.extend(handlers)

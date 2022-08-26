@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 
 
 class TestServiceServicer(services.TestServiceServicer):
-    def Execute(
+    async def Execute(  # type: ignore (no async types)
         self,
         request: pb.ExecuteRequest,
         context: aio.ServicerContext[pb.ExecuteRequest, pb.ExecuteResponse],

@@ -88,10 +88,14 @@ class AccessLogServerInterceptor(aio.ServerInterceptor):
                     ]
 
                     logger.info(
-                        f"{context.peer()} ({','.join(req)}) ({','.join(resp)}) {latency:.3f}ms"
+                        "%s (%s) (%s) %.3fms",
+                        context.peer(),
+                        ",".join(req),
+                        ",".join(resp),
+                        latency,
                     )
                 return response
 
             return new_behaviour
 
-        return t.cast("RpcMethodHandler", wrap_rpc_handler(wrapper, handler))
+        return wrap_rpc_handler(wrapper, handler)

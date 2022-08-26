@@ -12,6 +12,28 @@ if TYPE_CHECKING:
 logger = logging.getLogger("bentoml")
 
 
+class GenerateLatestMiddleware:
+    def __init__(self, app: ext.ASGIApp):
+        from bentoml._internal.configuration.containers import BentoMLContainer
+
+        self.app = app
+        self.metrics_client = BentoMLContainer.metrics_client.get()
+
+    async def __call__(
+        self, scope: ext.ASGIScope, receive: ext.ASGIReceive, send: ext.ASGISend
+    ) -> None:
+        assert scope["type"] == "http"
+        assert scope["path"] == "/"
+
+        from starlette.responses import Response
+
+        return await Response(
+            self.metrics_client.generate_latest(),
+            status_code=200,
+            media_type=self.metrics_client.CONTENT_TYPE_LATEST,
+        )(scope, receive, send)
+
+
 @click.command()
 @click.option("--fd", type=click.INT, required=True)
 @click.option("--backlog", type=click.INT, default=2048)
@@ -41,44 +63,20 @@ def main(fd: int, backlog: int, prometheus_dir: str | None):
     from bentoml._internal.configuration import get_debug_mode
     from bentoml._internal.configuration.containers import BentoMLContainer
 
-    component_context.component_name = "prom_server"
+    component_context.component_type = "prom_server"
 
     configure_server_logging()
 
-    metrics_client = BentoMLContainer.metrics_client.get()
-
     BentoMLContainer.development_mode.set(False)
-
+    metrics_client = BentoMLContainer.metrics_client.get()
     if prometheus_dir is not None:
         BentoMLContainer.prometheus_multiproc_dir.set(prometheus_dir)
-
-    class GenerateLatestMiddleware:
-        def __init__(self, app: ext.ASGIApp):
-            self.app = app
-
-        async def __call__(
-            self, scope: ext.ASGIScope, receive: ext.ASGIReceive, send: ext.ASGISend
-        ) -> None:
-            assert scope["type"] == "http"
-            assert scope["path"] == "/"
-
-            from starlette.responses import Response
-
-            response = Response(
-                metrics_client.generate_latest(),
-                status_code=200,
-                media_type=metrics_client.CONTENT_TYPE_LATEST,
-            )
-
-            await response(scope, receive, send)
-            return
 
     # create a ASGI app that wraps around the default HTTP prometheus server.
     prom_app = Starlette(
         debug=get_debug_mode(), middleware=[Middleware(GenerateLatestMiddleware)]
     )
     prom_app.mount("/", WSGIMiddleware(metrics_client.make_wsgi_app()))
-
     sock = socket.socket(fileno=fd)
 
     uvicorn_options: dict[str, t.Any] = {
@@ -86,13 +84,11 @@ def main(fd: int, backlog: int, prometheus_dir: str | None):
         "log_config": None,
         "workers": 1,
     }
-
     if psutil.WINDOWS:
         uvicorn_options["loop"] = "asyncio"
         import asyncio
 
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())  # type: ignore
-
     uvicorn.Server(uvicorn.Config(prom_app, **uvicorn_options)).run(sockets=[sock])
 
 

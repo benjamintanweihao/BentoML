@@ -1,4 +1,6 @@
 service: service:svc
+exclude:
+  - python_model.py
 python:
   packages:
     - pandas

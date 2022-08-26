@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import typing as t
 import tempfile
 import contextlib
@@ -9,7 +10,7 @@ from typing import TYPE_CHECKING
 from importlib import import_module
 
 import pytest
-from pytest import MonkeyPatch
+from _pytest.monkeypatch import MonkeyPatch
 
 from bentoml.exceptions import InvalidArgument
 from bentoml._internal.utils import LazyLoader
@@ -19,6 +20,7 @@ if TYPE_CHECKING:
     import numpy as np
     from _pytest.main import Session
     from _pytest.config import Config
+    from _pytest.python import Metafunc
     from _pytest.fixtures import FixtureRequest
 
     class FilledFixtureRequest(FixtureRequest):
@@ -36,6 +38,13 @@ def pytest_sessionstart(session: Session) -> None:
 
 def pytest_addoption(parser: pytest.Parser):
     parser.addoption("--project-dir", action="store", default=None)
+
+
+def pytest_generate_tests(metafunc: Metafunc):
+    if "deployment_mode" in metafunc.fixturenames:
+        metafunc.parametrize(
+            "deployment_mode", ["standalone", "docker", "distributed"], scope="session"
+        )
 
 
 def pytest_configure(config: Config) -> None:
@@ -76,10 +85,21 @@ def pytest_configure(config: Config) -> None:
     imported.create_model()
 
 
+def pytest_unconfigure(config: Config) -> None:
+
+    from bentoml._internal.configuration.containers import BentoMLContainer
+
+    # reset BentoMLContainer.bentoml_home
+    BentoMLContainer.bentoml_home.reset()
+
+    # Set dynamically by pytest_configure() above.
+    shutil.rmtree(t.cast(str, config._bentoml_home))
+
+
 @pytest.fixture(scope="session")
 def bentoml_home(request: FixtureRequest) -> str:
     # Set dynamically by pytest_configure() above.
-    return request.config._bentoml_home  # type: ignore
+    return t.cast(str, request.config._bentoml_home)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -105,8 +125,3 @@ def bin_file(tmpdir: str) -> str:
     with open(bin_file_, "wb") as of:
         of.write("â".encode("gb18030"))
     return str(bin_file_)
-
-
-@pytest.fixture(params=["standalone", "docker", "distributed"], scope="session")
-def deployment_mode(request: FilledFixtureRequest) -> str:
-    return request.param

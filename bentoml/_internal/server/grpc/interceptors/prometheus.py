@@ -97,7 +97,7 @@ class PrometheusServerInterceptor(aio.ServerInterceptor):
 
         def wrapper(behaviour: AsyncHandlerMethod[Response]):
             @functools.wraps(behaviour)
-            async def new_behavior(
+            async def new_behaviour(
                 request: Request, context: BentoServicerContext
             ) -> Response | t.Awaitable[Response]:
                 if not isinstance(request, pb.Request):
@@ -133,11 +133,9 @@ class PrometheusServerInterceptor(aio.ServerInterceptor):
                 with self.metrics_request_in_progress.labels(
                     api_name=api_name, service_version=service_version
                 ).track_inprogress():
-                    response = behaviour(request, context)
-                    if not hasattr(response, "__aiter__"):
-                        response = await response
+                    response = await behaviour(request, context)
                 return response
 
-            return new_behavior
+            return new_behaviour
 
-        return t.cast("RpcMethodHandler", wrap_rpc_handler(wrapper, handler))
+        return wrap_rpc_handler(wrapper, handler)

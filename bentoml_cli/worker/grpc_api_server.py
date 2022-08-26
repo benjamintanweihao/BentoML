@@ -54,7 +54,7 @@ def main(
     """
     Start BentoML API server.
     \b
-    This is an internal API, users should not use this directly. Instead use `bentoml serve <path> [--options]`
+    This is an internal API, users should not use this directly. Instead use `bentoml serve-grpc <path> [--options]`
     """
 
     import bentoml
@@ -86,10 +86,9 @@ def main(
     if max_concurrent_streams:
         grpc_options["max_concurrent_streams"] = int(max_concurrent_streams)
 
-    config = grpc.Config(
-        svc.grpc_servicer, bind_address=f"{host}:{port}", **grpc_options
-    )
-    grpc.Server(config).run()
+    grpc.Server(
+        grpc.Config(svc.grpc_servicer, bind_address=f"{host}:{port}", **grpc_options)
+    ).run()
 
 
 if __name__ == "__main__":

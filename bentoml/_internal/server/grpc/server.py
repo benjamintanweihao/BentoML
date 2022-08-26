@@ -60,9 +60,9 @@ class Server:
         from concurrent.futures import ThreadPoolExecutor
 
         assert not self.loaded
-
         if not bool(self.servicer):
             self.servicer.load()
+        assert self.servicer.loaded
 
         self.server = aio.server(
             migration_thread_pool=ThreadPoolExecutor(
@@ -80,6 +80,7 @@ class Server:
     def run(self) -> None:
         if not self.loaded:
             self.load()
+        assert self.loaded
 
         try:
             self.loop.run_until_complete(self.serve())

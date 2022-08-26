@@ -11,8 +11,8 @@ from bentoml.grpc.v1alpha1 import service_test_pb2_grpc as services_test
 async def test_success_invocation_custom_servicer(host: str) -> None:
 
     async with aio.insecure_channel(host) as channel:
+        await channel.channel_ready()
         stub = services_test.TestServiceStub(channel)  # type: ignore (no async types)
-        resp: pb_test.ExecuteRequest = stub.Execute(
-            request=pb_test.ExecuteRequest(input="BentoML")
-        )
+        request = pb_test.ExecuteRequest(input="BentoML")
+        resp: pb_test.ExecuteResponse = await stub.Execute(request)
         assert resp.output == "Hello, BentoML!"

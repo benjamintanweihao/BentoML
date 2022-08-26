@@ -229,8 +229,9 @@ def add_serve_command(cli: click.Group) -> None:
         "--host",
         type=click.STRING,
         default=BentoMLContainer.grpc.host.get(),
-        help="The host to bind for the gRPC server, default to 0.0.0.0",
+        help="The host to bind for the gRPC server",
         envvar="BENTOML_HOST",
+        show_default=True,
     )
     @click.option(
         "--api-workers",
@@ -266,7 +267,7 @@ def add_serve_command(cli: click.Group) -> None:
         is_flag=True,
         default=BentoMLContainer.grpc.reflection.enabled.get(),
         type=click.BOOL,
-        help="Enable reflection (Currently, only have effect in conjunction with '--grpc').",
+        help="Enable reflection.",
     )
     @click.option(
         "--max-concurrent-streams",
@@ -330,8 +331,8 @@ def add_serve_command(cli: click.Group) -> None:
                 bento,
                 working_dir=working_dir,
                 port=port,
-                backlog=backlog,
                 host=host,
+                backlog=backlog,
                 api_workers=api_workers,
                 max_concurrent_streams=max_concurrent_streams,
                 reflection=enable_reflection,
@@ -344,7 +345,8 @@ def add_serve_command(cli: click.Group) -> None:
                 working_dir=working_dir,
                 port=port,
                 backlog=backlog,
-                host=BentoMLContainer.grpc.host.get() if not host else host,
+                reload=reload,
+                host=DEFAULT_DEV_SERVER_HOST if not host else host,
                 max_concurrent_streams=max_concurrent_streams,
                 reflection=enable_reflection,
             )
