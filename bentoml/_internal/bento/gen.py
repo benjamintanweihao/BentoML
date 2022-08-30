@@ -87,9 +87,7 @@ def get_templates_variables(
         cuda_version = options.cuda_version
         python_version = options.python_version
 
-        if TYPE_CHECKING:
-            assert distro  # distro will be set via 'with_defaults()'
-            assert python_version  # python will also be set via 'with_defaults()'
+        assert distro and python_version
 
         spec = DistroSpec.from_distro(
             distro, cuda=cuda_version is not None, conda=use_conda
@@ -189,8 +187,7 @@ def generate_dockerfile(
     if options.base_image is not None:
         base = "base.j2"
     else:
-        if TYPE_CHECKING:
-            assert distro  # distro will be set via 'with_defaults()'
+        assert distro  # distro will be set via 'with_defaults()'
 
         spec = DistroSpec.from_distro(distro, cuda=use_cuda, conda=use_conda)
         base = f"{spec.release_type}_{distro}.j2"

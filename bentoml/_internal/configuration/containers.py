@@ -197,7 +197,7 @@ SCHEMA = Schema(
     }
 )
 
-_WARNING_MESSAGE = "field 'api_server.%s' is deprecated and have been recently move to 'api_server.http.%s'"
+_WARNING_MESSAGE = "field 'api_server.%s' is deprecated and has been renamed to 'api_server.http.%s'"
 
 
 class BentoMLConfiguration:
@@ -240,24 +240,11 @@ class BentoMLConfiguration:
                 if "http" not in user_api_config:
                     user_api_config["http"] = {}
 
-                if "port" in user_api_config:
-                    user_api_port = user_api_config.pop("port")
-                    user_api_config["http"]["port"] = user_api_port
-                    logger.warning(_WARNING_MESSAGE, "port", "port")
-                if "host" in user_api_config:
-                    user_api_host = user_api_config.pop("host")
-                    user_api_config["http"]["host"] = user_api_host
-                    logger.warning(_WARNING_MESSAGE, "host", "host")
-                if "max_request_size" in user_api_config:
-                    user_mrs = user_api_config.pop("max_request_size")
-                    user_api_config["http"]["max_request_size"] = user_mrs
-                    logger.warning(
-                        _WARNING_MESSAGE, "max_request_size", "max_request_size"
-                    )
-                if "cors" in user_api_config:
-                    user_cors = user_api_config.pop("cors")
-                    user_api_config["http"]["cors"] = user_cors
-                    logger.warning(_WARNING_MESSAGE, "cors", "cors")
+                for field in ["port", "host", "max_request_size", "cors"]:
+                    if field in user_api_config:
+                        old_field = user_api_config.pop(field)
+                        user_api_config["http"][field] = old_field
+                        logger.warning(_WARNING_MESSAGE, field, field)
 
                 config_merger.merge(override_config["api_server"], user_api_config)
 
@@ -592,8 +579,7 @@ class _BentoMLContainerClass:
         if isinstance(excluded_urls, list):
             return ExcludeList(excluded_urls)
         else:
-            if TYPE_CHECKING:
-                assert excluded_urls
+            assert excluded_urls, "excluded_urls not set in tracing_excluded_urls"
 
             return parse_excluded_urls(excluded_urls)
 

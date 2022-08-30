@@ -67,7 +67,6 @@ class IODescriptor(ABC, t.Generic[IOType]):
     def proto_field(self) -> ProtoField:
         """
         Returns a list of kinds fields that the IODescriptor can accept.
-        Make sure to keep in sync with bentoml.grpc.v1alpha1.Request message.
         """
         return t.cast("ProtoField", self._proto_field)
 
