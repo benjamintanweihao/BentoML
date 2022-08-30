@@ -329,8 +329,6 @@ class JSON(IODescriptor[JSONType]):
         return json_obj
 
     async def to_proto(self, obj: JSONType) -> struct_pb2.Value:
-        from google.protobuf.json_format import Parse
-
         if LazyType["pydantic.BaseModel"]("pydantic.BaseModel").isinstance(obj):
             obj = obj.dict()
 

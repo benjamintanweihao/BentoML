@@ -5,7 +5,6 @@ import sys
 import json
 import math
 import shutil
-import socket
 import typing as t
 import logging
 import tempfile

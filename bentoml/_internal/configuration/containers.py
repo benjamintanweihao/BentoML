@@ -197,7 +197,9 @@ SCHEMA = Schema(
     }
 )
 
-_WARNING_MESSAGE = "field 'api_server.%s' is deprecated and has been renamed to 'api_server.http.%s'"
+_WARNING_MESSAGE = (
+    "field 'api_server.%s' is deprecated and has been renamed to 'api_server.http.%s'"
+)
 
 
 class BentoMLConfiguration:
@@ -569,9 +571,7 @@ class _BentoMLContainerClass:
     @providers.SingletonFactory
     @staticmethod
     def tracing_excluded_urls(
-        excluded_urls: t.Optional[t.Union[str, t.List[str]]] = Provide[
-            config.tracing.excluded_urls
-        ],
+        excluded_urls: str | list[str] | None = Provide[config.tracing.excluded_urls],
     ):
         from opentelemetry.util.http import ExcludeList
         from opentelemetry.util.http import parse_excluded_urls
@@ -579,7 +579,12 @@ class _BentoMLContainerClass:
         if isinstance(excluded_urls, list):
             return ExcludeList(excluded_urls)
         else:
-            assert excluded_urls, "excluded_urls not set in tracing_excluded_urls"
+            if TYPE_CHECKING:
+                # we use TYPE_CHECKING since by default
+                # bentoml doesn't set any excluded_urls
+                # parse_excluded_urls also handle None type,
+                # but type checker can't infer from given logic.
+                assert excluded_urls
 
             return parse_excluded_urls(excluded_urls)
 

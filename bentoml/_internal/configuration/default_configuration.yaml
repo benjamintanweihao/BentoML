@@ -29,7 +29,7 @@ api_server:
     port: 50051
     # https://github.com/grpc/grpc/blob/ebfb028a29ef5f0f4be6f33c131c740ae0a32c84/src/core/ext/transport/chttp2/transport/http2_settings.cc#L51
     # see https://httpwg.org/specs/rfc7540.html#rfc.section.5.1.2 for more information.
-    max_concurrent_streams: 100
+    max_concurrent_streams: ~
     maximum_concurrent_rpcs: ~
     max_message_length: -1
     reflection:
@@ -46,11 +46,11 @@ runners:
   resources: ~
   logging:
     access:
-      enabled: True
-      request_content_length: True
-      request_content_type: True
-      response_content_length: True
-      response_content_type: True
+      enabled: true
+      request_content_length: true
+      request_content_type: true
+      response_content_length: true
+      response_content_type: true
   timeout: 300
 
 tracing:
