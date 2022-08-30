@@ -65,6 +65,7 @@ RUN {{ __setup_script__ }}
 {% block SETUP_BENTO_ENTRYPOINT %}
 # Default port for BentoServer
 EXPOSE 3000
+EXPOSE 50051
 
 # Expose Prometheus port
 EXPOSE {{ __prometheus_port__ }}

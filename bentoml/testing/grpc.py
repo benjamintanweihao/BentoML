@@ -39,9 +39,12 @@ async def async_client_call(
     data: dict[str, Message],
     assert_data: pb.Response | t.Callable[[pb.Response], bool] | None = None,
     timeout: int | None = None,
+    sanity: bool = True,
 ) -> pb.Response:
     req = pb.Request(api_name=method, **data)
     output: pb.Response = await stub.Call(req, timeout=timeout)
+    if sanity:
+        assert output
     if assert_data:
         try:
             if callable(assert_data):
@@ -50,7 +53,6 @@ async def async_client_call(
                 assert output == assert_data
         except AssertionError:
             raise AssertionError(f"Failed while checking data: {output}")
-
     return output
 
 

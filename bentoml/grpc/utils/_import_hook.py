@@ -9,6 +9,7 @@ if TYPE_CHECKING:
 
 def import_generated_stubs(
     version: str = "v1alpha1",
+    file: str = "service.proto",
 ) -> tuple[types.ModuleType, types.ModuleType]:
     """
     Import generated stubs.
@@ -18,18 +19,19 @@ def import_generated_stubs(
 
     GIT_ROOT = Path(__file__).parent.parent.parent.parent
 
-    exception_message = f"Generated stubs are missing. To generate stubs, run '.{GIT_ROOT}/scripts/generate_grpc_stubs.sh'"
+    exception_message = f"Generated stubs are missing. To generate stubs, run '{GIT_ROOT}/scripts/generate_grpc_stubs.sh'"
+    file = file.split(".")[0]
 
     service_pb2 = LazyLoader(
-        "service_pb2",
+        f"{file}_pb2",
         globals(),
-        f"bentoml.grpc.{version}.service_pb2",
+        f"bentoml.grpc.{version}.{file}_pb2",
         exc_msg=exception_message,
     )
     service_pb2_grpc = LazyLoader(
-        "service_pb2_grpc",
+        f"{file}_pb2_grpc",
         globals(),
-        f"bentoml.grpc.{version}.service_pb2_grpc",
+        f"bentoml.grpc.{version}.{file}_pb2_grpc",
         exc_msg=exception_message,
     )
     return service_pb2, service_pb2_grpc

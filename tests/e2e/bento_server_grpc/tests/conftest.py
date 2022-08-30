@@ -20,7 +20,7 @@ def host(
 ) -> t.Generator[str, None, None]:
     if (
         (psutil.WINDOWS or psutil.MACOS)
-        and os.environ.get("GITHUB_ACTION")
+        and os.environ.get("GITHUB_ACTIONS")
         and deployment_mode == "docker"
     ):
         pytest.skip(

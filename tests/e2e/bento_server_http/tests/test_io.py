@@ -1,5 +1,3 @@
-# type: ignore[no-untyped-def]
-
 import io
 import sys
 import json
@@ -13,7 +11,7 @@ from bentoml.testing.utils import parse_multipart_form
 
 
 @pytest.mark.asyncio
-async def test_numpy(host):
+async def test_numpy(host: str):
     await async_request(
         "POST",
         f"http://{host}/predict_ndarray_enforce_shape",
@@ -47,7 +45,7 @@ async def test_numpy(host):
 
 
 @pytest.mark.asyncio
-async def test_json(host):
+async def test_json(host: str):
     ORIGIN = "http://bentoml.ai"
 
     await async_request(
@@ -79,7 +77,7 @@ async def test_json(host):
 
 
 @pytest.mark.asyncio
-async def test_obj(host):
+async def test_obj(host: str):
     for obj in [1, 2.2, "str", [1, 2, 3], {"a": 1, "b": 2}]:
         obj_str = json.dumps(obj, separators=(",", ":"))
         await async_request(
@@ -93,7 +91,7 @@ async def test_obj(host):
 
 
 @pytest.mark.asyncio
-async def test_pandas(host):
+async def test_pandas(host: str):
     import pandas as pd
 
     ORIGIN = "http://bentoml.ai"
@@ -131,7 +129,7 @@ async def test_pandas(host):
 
 
 @pytest.mark.asyncio
-async def test_file(host, bin_file):
+async def test_file(host: str, bin_file: bytes):
     # Test File as binary
     with open(str(bin_file), "rb") as f:
         b = f.read()

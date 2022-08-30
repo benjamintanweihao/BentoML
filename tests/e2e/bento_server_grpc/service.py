@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel
 from _servicer import TestServiceServicer
 from PIL.Image import fromarray
-from _interceptor import AsyncContextInterceptor
 
 import bentoml
 from bentoml.io import File
@@ -15,8 +14,6 @@ from bentoml.io import Image
 from bentoml.io import Multipart
 from bentoml.io import NumpyNdarray
 from bentoml.io import PandasDataFrame
-from bentoml.grpc.v1alpha1 import service_test_pb2 as pb_test
-from bentoml.grpc.v1alpha1 import service_test_pb2_grpc as services_test
 from bentoml._internal.utils import LazyLoader
 
 if TYPE_CHECKING:
@@ -25,6 +22,8 @@ if TYPE_CHECKING:
     from PIL.Image import Image as PILImage
     from numpy.typing import NDArray
 
+    from bentoml.grpc.v1alpha1 import service_test_pb2 as pb_test
+    from bentoml.grpc.v1alpha1 import service_test_pb2_grpc as services_test
     from bentoml._internal.types import FileLike
     from bentoml._internal.types import JSONSerializable
     from bentoml.picklable_model import get_runnable
@@ -49,6 +48,9 @@ if TYPE_CHECKING:
         ]
 
 else:
+    from bentoml.grpc.utils import import_generated_stubs
+
+    pb_test, services_test = import_generated_stubs(file="service_test.proto")
     np = LazyLoader("np", globals(), "numpy")
     pd = LazyLoader("pd", globals(), "pandas")
 
@@ -67,7 +69,9 @@ svc.mount_grpc_servicer(
     service_names=services_name,
 )
 
-svc.add_grpc_interceptor(AsyncContextInterceptor, usage="NLP", accuracy_score=0.8247)
+# TODO: write custom interceptor
+# from _interceptor import AsyncContextInterceptor
+# svc.add_grpc_interceptor(AsyncContextInterceptor, usage="NLP", accuracy_score=0.8247)
 
 
 @svc.api(input=JSON(), output=JSON())

@@ -48,7 +48,7 @@ else:
 
 def log_exception(request: pb.Request, exc_info: ExcInfoType) -> None:
     # gRPC will always send a POST request.
-    logger.error(f"Exception on /{request.api_name} [POST]", exc_info=exc_info)
+    logger.error("Exception on /%s [POST]", request.api_name, exc_info=exc_info)
 
 
 class Servicer:

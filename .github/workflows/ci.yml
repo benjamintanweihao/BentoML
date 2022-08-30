@@ -215,15 +215,14 @@ jobs:
         server_type: ["http", "grpc"]
 
     if: ${{ (github.event_name == 'pull_request' && needs.diff.outputs.bentoml == 'true') || github.event_name == 'push' }}
-    name: python${{ matrix.python-version }}_e2e_tests (${{ matrix.os }})
+    name: python${{ matrix.python-version }}_e2e_tests (${{ matrix.os }}/${{ matrix.server_type }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
 
     env:
       SETUPTOOLS_USE_DISTUTILS: stdlib
       BENTOML_BUNDLE_LOCAL_BUILD: True
-      GITHUB_ACTION: True
-      GRPC_VERBOSITY: "DEBUG"
+      GRPC_VERBOSITY: DEBUG
 
     steps:
       - uses: actions/checkout@v3
@@ -256,7 +255,6 @@ jobs:
           key: ${{ runner.os }}-tests-${{ hashFiles('requirements/tests-requirements.txt') }}
 
       - name: Generate gRPC stubs
-        if: ${{ matrix.server_type == 'grpc' }}
         run: |
           pip install "grpcio-tools>=1.41" mypy-protobuf
           python -m grpc_tools.protoc -I. --grpc_python_out=. --python_out=. --mypy_out=. --mypy_grpc_out=. bentoml/grpc/v1alpha1/service.proto bentoml/grpc/v1alpha1/service_test.proto
@@ -267,13 +265,9 @@ jobs:
             pip install -e ".[grpc]"
           else
             pip install -e .
+            pip install -r tests/e2e/bento_server_http/requirements.txt
           fi
           pip install -r requirements/tests-requirements.txt
-
-      - name: Install HTTP dependencies
-        if: ${{ matrix.server_type == 'http' }}
-        run: |
-          pip install -r tests/e2e/bento_server_http/requirements.txt
 
       - name: Run ${{ matrix.server_type }} tests and generate coverage report
         run: ./scripts/ci/run_tests.sh ${{ matrix.server_type }}_server
@@ -281,7 +275,7 @@ jobs:
       - name: Upload test coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
-          flags: e2e-tests
+          flags: e2e-tests-%{{ matrix.server_type }}
           directory: ./
           files: ./tests/e2e/bento_server_${{ matrix.server_type }}/${{ matrix.server_type }}_server.xml
           verbose: true
