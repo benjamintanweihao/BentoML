@@ -250,14 +250,14 @@ class JSON(IODescriptor[JSONType]):
         try:
             json_obj = json.loads(json_str)
         except json.JSONDecodeError as e:
-            raise BadInput(f"Invalid JSON input received: {e}") from e
+            raise BadInput(f"Invalid JSON input received: {e}") from None
 
         if self._pydantic_model:
             try:
                 pydantic_model = self._pydantic_model.parse_obj(json_obj)
                 return pydantic_model
             except pydantic.ValidationError as e:
-                raise BadInput(f"Invalid JSON input received: {e}") from e
+                raise BadInput(f"Invalid JSON input received: {e}") from None
         else:
             return json_obj
 
@@ -304,23 +304,27 @@ class JSON(IODescriptor[JSONType]):
                 try:
                     return self._pydantic_model.parse_obj(json_obj)
                 except pydantic.ValidationError as e:
-                    raise UnprocessableEntity(f"Invalid JSON input received: {e}")
+                    raise UnprocessableEntity(
+                        f"Invalid JSON input received: {e}"
+                    ) from None
         elif request.HasField("raw_bytes_contents"):
             content = request.raw_bytes_contents
             if self._pydantic_model:
                 try:
                     return self._pydantic_model.parse_raw(content)
                 except pydantic.ValidationError as e:
-                    raise UnprocessableEntity(f"Invalid JSON input received: {e}")
+                    raise UnprocessableEntity(
+                        f"Invalid JSON input received: {e}"
+                    ) from None
 
             try:
                 json_obj = json.loads(content)
             except json.JSONDecodeError as e:
-                raise UnprocessableEntity(f"Invalid JSON input received: {e}")
+                raise BadInput(f"Invalid JSON input received: {e}") from None
         else:
             raise BadInput(
                 "Neither 'json' nor 'raw_bytes_contents' is found in the request message",
-            )
+            ) from None
 
         return json_obj
 
@@ -331,17 +335,16 @@ class JSON(IODescriptor[JSONType]):
             obj = obj.dict()
 
         msg = struct_pb2.Value()
-
         if obj:
-            json_str = json.dumps(
-                obj,
-                cls=self._json_encoder,
-                ensure_ascii=False,
-                allow_nan=False,
-                indent=None,
-                separators=(",", ":"),
+            msg.MergeFromString(
+                json.dumps(
+                    obj,
+                    cls=self._json_encoder,
+                    ensure_ascii=False,
+                    allow_nan=False,
+                    indent=None,
+                    separators=(",", ":"),
+                ).encode("utf-8")
             )
-
-            return Parse(json_str, msg)
 
         return msg

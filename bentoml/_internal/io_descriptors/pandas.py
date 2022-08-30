@@ -26,6 +26,7 @@ from ..service.openapi.specification import MediaType
 from ..service.openapi.specification import RequestBody
 
 if TYPE_CHECKING:
+    import numpy as np
     import pandas as pd
 
     from bentoml.grpc.v1alpha1 import service_pb2 as pb
@@ -34,7 +35,9 @@ if TYPE_CHECKING:
     from ..context import InferenceApiContext as Context
 
 else:
-    pb = LazyLoader("pb", globals(), "bentoml.grpc.v1alpha1.service_pb2")
+    from bentoml.grpc.utils import import_generated_stubs
+
+    pb, _ = import_generated_stubs()
     pd = LazyLoader(
         "pd",
         globals(),
@@ -43,6 +46,17 @@ else:
     )
 
 logger = logging.getLogger(__name__)
+
+
+@functools.lru_cache(maxsize=1)
+def pddtype_to_fieldpb_map() -> dict[ext.NpDTypeLike, str]:
+    return {
+        np.dtype("bool"): "bool_values",
+        np.dtype("float64"): "float_values",
+        np.dtype("float32"): "float_values",
+        np.dtype("int32"): "int32_values",
+        np.dtype("int64"): "int64_values",
+    }
 
 
 # Check for parquet support

@@ -10,7 +10,6 @@ from starlette.responses import Response
 from .base import IODescriptor
 from ...exceptions import InvalidArgument
 from ...exceptions import BentoMLException
-from ...exceptions import UnprocessableEntity
 from ..service.openapi import SUCCESS_DESCRIPTION
 from ..utils.formparser import populate_multipart_requests
 from ..utils.formparser import concat_to_multipart_response
@@ -234,11 +233,11 @@ class Multipart(IODescriptor[t.Any]):
             if len(set(field) - set(self._inputs)) != 0:
                 raise InvalidArgument(
                     f"'{self.__class__.__name__}' only accepts '{set(self._inputs)}' as input fields. Invalid fields are: {set(field) - set(self._inputs)}",
-                )
+                ) from None
         else:
-            raise UnprocessableEntity(
+            raise InvalidArgument(
                 f"'multipart' is not found in the request message for {self.__class__.__name__}",
-            )
+            ) from None
 
         return {
             key: await self._inputs[key].from_proto(input_pb)

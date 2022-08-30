@@ -4,6 +4,7 @@ import json
 import typing as t
 import logging
 from typing import TYPE_CHECKING
+from functools import lru_cache
 
 from starlette.requests import Request
 from starlette.responses import Response
@@ -36,6 +37,60 @@ else:
     np = LazyLoader("np", globals(), "numpy")
 
 logger = logging.getLogger(__name__)
+
+
+# TODO: support the following types for for protobuf message:
+# - support complex64, complex128, object and struct types
+# - BFLOAT16, QINT32, QINT16, QUINT16, QINT8, QUINT8
+#
+# For int16, uint16, int8, uint8 -> specify types in NumpyNdarray + using int_values.
+#
+# For bfloat16, half (float16) -> specify types in NumpyNdarray + using float_values.
+#
+# for string_values, use <U for np.dtype instead of S (zero-terminated bytes).
+FIELDPB_TO_NPDTYPE_NAME_MAP = {
+    "bool_values": "bool",
+    "float_values": "float32",
+    "string_values": "<U",
+    "double_values": "float64",
+    "int32_values": "int32",
+    "int64_values": "int64",
+    "uint32_values": "uint32",
+    "uint64_values": "uint64",
+}
+
+
+@lru_cache(maxsize=1)
+def dtypepb_to_npdtype_map() -> dict[pb.NDArray.DType.ValueType, ext.NpDTypeLike]:
+    # pb.NDArray.Dtype -> np.dtype
+    return {
+        pb.NDArray.DTYPE_FLOAT: np.dtype("float32"),
+        pb.NDArray.DTYPE_DOUBLE: np.dtype("double"),
+        pb.NDArray.DTYPE_INT32: np.dtype("int32"),
+        pb.NDArray.DTYPE_INT64: np.dtype("int64"),
+        pb.NDArray.DTYPE_UINT32: np.dtype("uint32"),
+        pb.NDArray.DTYPE_UINT64: np.dtype("uint64"),
+        pb.NDArray.DTYPE_BOOL: np.dtype("bool"),
+        pb.NDArray.DTYPE_STRING: np.dtype("<U"),
+    }
+
+
+@lru_cache(maxsize=1)
+def fieldpb_to_npdtype_map() -> dict[str, ext.NpDTypeLike]:
+    # str -> np.dtype
+    return {k: np.dtype(v) for k, v in FIELDPB_TO_NPDTYPE_NAME_MAP.items()}
+
+
+@lru_cache(maxsize=1)
+def npdtype_to_dtypepb_map() -> dict[ext.NpDTypeLike, pb.NDArray.DType.ValueType]:
+    # np.dtype -> pb.NDArray.Dtype
+    return {v: k for k, v in dtypepb_to_npdtype_map().items()}
+
+
+@lru_cache(maxsize=1)
+def npdtype_to_fieldpb_map() -> dict[ext.NpDTypeLike, str]:
+    # np.dtype -> str
+    return {v: k for k, v in fieldpb_to_npdtype_map().items()}
 
 
 def _is_matched_shape(left: tuple[int, ...], right: tuple[int, ...]) -> bool:
@@ -372,9 +427,6 @@ class NumpyNdarray(IODescriptor["ext.NpNDArray"]):
             a ``numpy.ndarray`` object. This can then be used
              inside users defined logics.
         """
-        from bentoml.grpc.utils.mapping import dtypepb_to_npdtype_map
-        from bentoml.grpc.utils.mapping import fieldpb_to_npdtype_map
-
         if request.HasField("ndarray"):
             if request.ndarray.dtype == pb.NDArray.DTYPE_UNSPECIFIED:
                 dtype = None
@@ -434,9 +486,6 @@ class NumpyNdarray(IODescriptor["ext.NpNDArray"]):
             `io_descriptor_pb2.Array`:
                 Protobuf representation of given `np.ndarray`
         """
-        from bentoml.grpc.utils.mapping import npdtype_to_dtypepb_map
-        from bentoml.grpc.utils.mapping import npdtype_to_fieldpb_map
-
         try:
             obj = self.validate_array(obj, exception_cls=InternalServerError)
         except InternalServerError:
