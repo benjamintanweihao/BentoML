@@ -150,7 +150,7 @@ SCHEMA = Schema(
                     "access_control_expose_headers": Or([str], str, None),
                 },
             },
-            Optional("grpc"): {
+            "grpc": {
                 "host": And(str, _is_ip_address),
                 "port": And(int, _larger_than_zero),
                 "metrics": {
@@ -444,19 +444,19 @@ class _BentoMLContainerClass:
         | None = Provide[http.cors.access_control_allow_headers],
         max_age: int | None = Provide[http.cors.access_control_max_age],
     ) -> dict[str, list[str] | str | int]:
-        # use {} instead of dict()
-        return {
-            key: value
-            for key, value in {
-                "allow_origins": allow_origins,
-                "allow_credentials": allow_credentials,
-                "expose_headers": expose_headers,
-                "allow_methods": allow_methods,
-                "allow_headers": allow_headers,
-                "max_age": max_age,
-            }.items()
-            if value
+        kwargs = dict(
+            allow_origins=allow_origins,
+            allow_credentials=allow_credentials,
+            expose_headers=expose_headers,
+            allow_methods=allow_methods,
+            allow_headers=allow_headers,
+            max_age=max_age,
+        )
+
+        filtered_kwargs: dict[str, list[str] | str | int] = {
+            k: v for k, v in kwargs.items() if v is not None
         }
+        return filtered_kwargs
 
     api_server_workers = providers.Factory[int](
         lambda workers: workers or (multiprocessing.cpu_count() // 2) + 1,

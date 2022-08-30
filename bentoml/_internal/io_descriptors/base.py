@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import typing as t
-from abc import ABCMeta
+from abc import ABC
 from abc import abstractmethod
 from typing import overload
 from typing import TYPE_CHECKING
@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 IOType = t.TypeVar("IOType")
 
 
-class IODescriptor(t.Generic[IOType], metaclass=ABCMeta):
+class IODescriptor(ABC, t.Generic[IOType]):
     """
     IODescriptor describes the input/output data format of an InferenceAPI defined
     in a :code:`bentoml.Service`. This is an abstract base class for extending new HTTP

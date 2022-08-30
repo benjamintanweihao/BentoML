@@ -38,6 +38,7 @@ def pytest_sessionstart(session: Session) -> None:
 
 def pytest_addoption(parser: pytest.Parser):
     parser.addoption("--project-dir", action="store", default=None)
+    parser.addoption("--cleanup", action="store_true")
 
 
 def pytest_generate_tests(metafunc: Metafunc):
@@ -87,13 +88,15 @@ def pytest_configure(config: Config) -> None:
 
 def pytest_unconfigure(config: Config) -> None:
 
-    from bentoml._internal.configuration.containers import BentoMLContainer
+    cleanup = config.getoption("cleanup")
+    if cleanup:
+        from bentoml._internal.configuration.containers import BentoMLContainer
 
-    # reset BentoMLContainer.bentoml_home
-    BentoMLContainer.bentoml_home.reset()
+        # reset BentoMLContainer.bentoml_home
+        BentoMLContainer.bentoml_home.reset()
 
-    # Set dynamically by pytest_configure() above.
-    shutil.rmtree(t.cast(str, config._bentoml_home))
+        # Set dynamically by pytest_configure() above.
+        shutil.rmtree(t.cast(str, config._bentoml_home))
 
 
 @pytest.fixture(scope="session")

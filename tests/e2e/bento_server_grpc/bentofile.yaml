@@ -1,6 +1,7 @@
 service: service:svc
 exclude:
   - python_model.py
+  - "*.xml"
 python:
   packages:
     - pandas
