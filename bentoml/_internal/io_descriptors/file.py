@@ -35,7 +35,7 @@ else:
 
     pb, _ = import_generated_stubs()
 
-FileType: t.TypeAlias = t.Union[io.IOBase, t.IO[bytes], FileLike[bytes]]
+FileType = t.Union[io.IOBase, t.IO[bytes], FileLike[bytes]]
 
 
 class File(IODescriptor[FileType]):
@@ -186,17 +186,6 @@ class File(IODescriptor[FileType]):
             )
 
         return pb.File(kind=kind, content=body)
-
-    # These two functions below are to accomodate pylint
-    async def from_http_request(self, request: Request) -> FileType:
-        raise NotImplementedError(
-            f"'{self.__class__.__name__}.from_http_request' is not implemented."
-        )
-
-    async def from_proto(self, request: pb.Request) -> FileType:
-        raise NotImplementedError(
-            f"'{self.__class__.__name__}.from_proto' is not implemented."
-        )
 
 
 class BytesIOFile(File):

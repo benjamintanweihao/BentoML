@@ -215,7 +215,7 @@ jobs:
         server_type: ["http", "grpc"]
 
     if: ${{ (github.event_name == 'pull_request' && needs.diff.outputs.bentoml == 'true') || github.event_name == 'push' }}
-    name: python${{ matrix.python-version }}_e2e_tests (${{ matrix.os }}/${{ matrix.server_type }})
+    name: python${{ matrix.python-version }}_${{ matrix.server_type }}_e2e_tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
 
