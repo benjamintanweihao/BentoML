@@ -276,6 +276,8 @@ jobs:
         uses: codecov/codecov-action@v3
         with:
           flags: e2e-tests-%{{ matrix.server_type }}
+          name: codecov-${{ matrix.os }}-python${{ matrix.python-version }}-e2e
+          fail_ci_if_error: true
           directory: ./
           files: ./tests/e2e/bento_server_${{ matrix.server_type }}/${{ matrix.server_type }}_server.xml
           verbose: true

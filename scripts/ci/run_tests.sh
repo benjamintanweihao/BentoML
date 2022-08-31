@@ -210,7 +210,7 @@ main() {
   if [ "$type_tests" == 'e2e' ]; then
     p="$GIT_ROOT"/"$test_dir"/"$fname"
     cd "$p" || exit 1
-    OPTS=( "${OPTS[@]}" "--project-dir" "$p" )
+    OPTS=( "${OPTS[@]}" "--project-dir" "$p" "--cleanup" )
     path="."
   else
     path="$GIT_ROOT"/"$test_dir"/"$fname"

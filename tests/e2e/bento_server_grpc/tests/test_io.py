@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import traceback
 from typing import TYPE_CHECKING
+from functools import partial
 
 import pytest
 
@@ -16,6 +18,22 @@ else:
     pb, _ = import_generated_stubs()
 
 
+def assert_ndarray(
+    resp: pb.Response,
+    assert_shape: list[int],
+    assert_dtype: pb.NDArray.DType.ValueType,
+) -> bool:
+
+    dtype = resp.ndarray.dtype
+    try:
+        assert resp.ndarray.shape == assert_shape
+        assert dtype == assert_dtype
+        return True
+    except AssertionError:
+        traceback.print_exc()
+        return False
+
+
 @pytest.mark.asyncio
 async def test_numpy(host: str):
     async with make_client(host) as client:
@@ -23,9 +41,9 @@ async def test_numpy(host: str):
             "double_ndarray",
             stub=client,
             data={"ndarray": make_pb_ndarray((1000,))},
-            assert_data=lambda resp: resp.ndarray.dtype
-            == pb.NDArray.DTYPE_FLOAT.as_integer_ratio()[1]
-            and resp.ndarray.shape == [1000],
+            assert_data=partial(
+                assert_ndarray, assert_shape=[1000], assert_dtype=pb.NDArray.DTYPE_FLOAT
+            ),
         )
         res = await async_client_call(
             "echo_ndarray_from_sample",
