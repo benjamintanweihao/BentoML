@@ -62,4 +62,8 @@ class GenericHeadersServerInterceptor(aio.ServerInterceptor):
 
             return new_behaviour
 
-        return t.cast("RpcMethodHandler", wrap_rpc_handler(wrapper, handler))
+        return wrap_rpc_handler(wrapper, handler)
+
+
+class ExceptionHandlerServerInterceptor(aio.ServerInterceptor):
+    ...
