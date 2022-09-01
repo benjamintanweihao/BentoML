@@ -181,7 +181,7 @@ main() {
   #  validate_yaml
   parse_config "$argv"
 
-  OPTS=(--cov=bentoml --cov-config="$GIT_ROOT"/pyproject.toml --cov-report=xml:"$target.xml" --cov-report=term-missing -x -vvv)
+  OPTS=(--cov=bentoml --cov-config="$GIT_ROOT"/pyproject.toml --cov-report=xml:"$target.xml" --cov-report=term-missing -vvv)
 
   if [ -n "${PYTESTARGS[*]}" ]; then
     # shellcheck disable=SC2206
@@ -210,7 +210,10 @@ main() {
   if [ "$type_tests" == 'e2e' ]; then
     p="$GIT_ROOT"/"$test_dir"/"$fname"
     cd "$p" || exit 1
-    OPTS=( "${OPTS[@]}" "--project-dir" "$p" "--cleanup" )
+    OPTS=( "${OPTS[@]}" "--project-dir" "$p" )
+    if [ -z "$GITHUB_ACTIONS" ]; then
+      OPTS=( "${OPTS[@]}" "--cleanup" )
+    fi
     path="."
   else
     path="$GIT_ROOT"/"$test_dir"/"$fname"

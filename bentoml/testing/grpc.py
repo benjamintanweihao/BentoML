@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from bentoml._internal.utils import LazyLoader
 
 if TYPE_CHECKING:
+    import grpc
     import numpy as np
     from grpc import aio
     from numpy.typing import NDArray  # pylint: disable=unused-import
@@ -22,6 +23,7 @@ else:
     exception_msg = (
         "'grpcio' is not installed. Please install it with 'pip install -U grpcio'"
     )
+    grpc = LazyLoader("grpc", globals(), "grpc", exc_msg=exception_msg)
     aio = LazyLoader("aio", globals(), "grpc.aio", exc_msg=exception_msg)
     np = LazyLoader("np", globals(), "numpy")
 
@@ -36,7 +38,7 @@ def make_pb_ndarray(shape: tuple[int, ...]) -> pb.NDArray:
 async def async_client_call(
     method: str,
     stub: services.BentoServiceStub,
-    data: dict[str, Message],
+    data: dict[str, Message | bytes | str],
     assert_data: pb.Response | t.Callable[[pb.Response], bool] | None = None,
     timeout: int | None = None,
     sanity: bool = True,
@@ -64,6 +66,7 @@ async def make_client(
         # create a blocking call to wait til channel is ready.
         await channel.channel_ready()
         yield services.BentoServiceStub(channel)  # type: ignore (no generated stubs)
+    await channel.close()
 
 
 async def make_standalone_server(

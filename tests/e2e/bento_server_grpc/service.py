@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel
 from _servicer import TestServiceServicer
 from PIL.Image import fromarray
+from _interceptor import AsyncContextInterceptor
 
 import bentoml
 from bentoml.io import File
@@ -68,10 +69,7 @@ svc.mount_grpc_servicer(
     add_servicer_fn=services_test.add_TestServiceServicer_to_server,
     service_names=services_name,
 )
-
-# TODO: write custom interceptor
-# from _interceptor import AsyncContextInterceptor
-# svc.add_grpc_interceptor(AsyncContextInterceptor, usage="NLP", accuracy_score=0.8247)
+svc.add_grpc_interceptor(AsyncContextInterceptor, usage="NLP", accuracy_score=0.8247)
 
 
 @svc.api(input=JSON(), output=JSON())

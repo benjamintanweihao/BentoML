@@ -64,14 +64,6 @@ def to_http_status(status_code: grpc.StatusCode) -> int:
     return status.value
 
 
-class RpcMethodType(str, enum.Enum):
-    UNARY = "UNARY"
-    CLIENT_STREAMING = "CLIENT_STREAMING"
-    SERVER_STREAMING = "SERVER_STREAMING"
-    BIDI_STREAMING = "BIDI_STREAMING"
-    UNKNOWN = "UNKNOWN"
-
-
 @dataclass
 class MethodName:
     """

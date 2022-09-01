@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import aiohttp
 import multidict
 
-logger = logging.getLogger("bentoml.tests")
+logger = logging.getLogger("bentoml.testing")
 
 
 if TYPE_CHECKING:

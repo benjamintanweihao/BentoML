@@ -90,9 +90,12 @@ class Servicer:
     def build_interceptors_stack(self) -> list[aio.ServerInterceptor]:
         from .interceptors import GenericHeadersServerInterceptor
 
-        return list(
-            map(lambda x: x(), [GenericHeadersServerInterceptor, *self.interceptors])
-        )
+        stack = [
+            GenericHeadersServerInterceptor,
+            *self.interceptors,
+        ]
+
+        return list(map(lambda x: x(), stack))
 
     async def startup(self):
         for handler in self.on_startup:
