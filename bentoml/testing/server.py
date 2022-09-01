@@ -7,6 +7,7 @@ import time
 import socket
 import typing as t
 import urllib
+import asyncio
 import itertools
 import contextlib
 import subprocess
@@ -17,16 +18,28 @@ from typing import TYPE_CHECKING
 from contextlib import contextmanager
 
 from bentoml._internal.tag import Tag
+from bentoml._internal.utils import LazyLoader
 from bentoml._internal.utils import reserve_free_port
 from bentoml._internal.utils import cached_contextmanager
 from bentoml._internal.utils.platform import kill_subprocess_tree
 
 if TYPE_CHECKING:
+    from grpc import aio
+    from grpc_health.v1 import health_pb2 as pb_health
+    from grpc_health.v1 import health_pb2_grpc as services_health
     from aiohttp.typedefs import LooseHeaders
     from starlette.datastructures import Headers
     from starlette.datastructures import FormData
 
     from bentoml._internal.bento.bento import Bento
+
+    DeploymentMode = t.Literal["standalone", "distributed", "docker"]
+else:
+    pb_health = LazyLoader("pb_health", globals(), "grpc_health.v1.health_pb2")
+    services_health = LazyLoader(
+        "services_health", globals(), "grpc_health.v1.health_pb2_grpc"
+    )
+    aio = LazyLoader("aio", globals(), "grpc.aio")
 
 
 async def parse_multipart_form(headers: "Headers", body: bytes) -> "FormData":
@@ -101,6 +114,41 @@ def http_server_warmup(
     return False
 
 
+async def grpc_server_warmup(
+    host_url: str,
+    timeout: float,
+    check_interval: float = 1,
+    popen: subprocess.Popen[t.Any] | None = None,
+    service_name: str = "bentoml.grpc.v1alpha1.BentoService",
+) -> bool:
+    from bentoml.testing.grpc import make_client
+
+    start_time = time.time()
+    print("Waiting for host %s to be ready.." % host_url)
+    while time.time() - start_time < timeout:
+        try:
+            async with make_client(host_url, stubs=services_health.HealthStub) as client:  # type: ignore (no infer types)
+                if TYPE_CHECKING:
+                    client = t.cast(services_health.HealthStub, client)
+
+                resp: pb_health.HealthCheckResponse = await client.Check(
+                    pb_health.HealthCheckRequest(service=service_name),
+                    timeout=timeout,
+                )
+                print(resp)
+                if popen and popen.poll() is not None:
+                    return False
+                elif resp.status == pb_health.HealthCheckResponse.SERVING:
+                    return True
+                else:
+                    time.sleep(check_interval)
+        except (aio.AioRpcError, ConnectionError) as e:
+            print(f"[{e}] Retrying to connect to the host {host_url}...")
+            time.sleep(check_interval)
+    print(f"Timed out waiting {timeout} seconds for Server {host_url} to be ready.")
+    return False
+
+
 @cached_contextmanager("{project_path}")
 def bentoml_build(project_path: str) -> t.Generator[Bento, None, None]:
     """
@@ -125,7 +173,7 @@ def bentoml_containerize(
     if image_tag is None:
         image_tag = bento_tag.name
     print(f"Building bento server docker image: {bento_tag}")
-    bentos.containerize(str(bento_tag), docker_image_tag=image_tag, progress="plain")
+    bentos.containerize(str(bento_tag), docker_image_tag=[image_tag], progress="plain")
     yield image_tag
     print(f"Removing bento server docker image: {image_tag}")
     subprocess.call(["docker", "rmi", image_tag])
@@ -155,10 +203,6 @@ def run_bento_server_in_docker(
         container_name,
         "--publish",
         f"{port}:{bind_port}",
-        "--env",
-        "BENTOML_LOG_STDOUT=true",
-        "--env",
-        "BENTOML_LOG_STDERR=true",
     ]
     if config_file is not None:
         cmd.extend(["--env", "BENTOML_CONFIG=/home/bentoml/bentoml_config.yml"])
@@ -168,7 +212,7 @@ def run_bento_server_in_docker(
     if grpc:
         from bentoml._internal.configuration.containers import BentoMLContainer
 
-        with reserve_free_port(enable_so_reuseport=True) as prometheus_port:
+        with reserve_free_port() as prometheus_port:
             pass
 
         prom_port = BentoMLContainer.grpc.metrics.port.get()
@@ -185,7 +229,7 @@ def run_bento_server_in_docker(
     ) as proc:
         try:
             host_url = f"{host}:{port}"
-            if grpc:
+            if grpc and asyncio.run(grpc_server_warmup(host_url, timeout, popen=proc)):
                 yield host_url
             elif http_server_warmup(host_url, timeout, popen=proc):
                 yield host_url
@@ -236,7 +280,9 @@ def run_bento_server(
     )
     try:
         host_url = f"{host}:{server_port}"
-        if not grpc:
+        if grpc:
+            assert asyncio.run(grpc_server_warmup(host_url, timeout, popen=p))
+        else:
             assert http_server_warmup(host_url, timeout=timeout, popen=p)
         yield host_url
     finally:
@@ -358,7 +404,9 @@ def run_bento_server_distributed(
     )
     try:
         host_url = f"{host}:{server_port}"
-        if not grpc:
+        if grpc:
+            asyncio.run(grpc_server_warmup(host_url, timeout))
+        else:
             http_server_warmup(host_url, timeout=timeout)
         yield host_url
     finally:
@@ -377,7 +425,7 @@ def host_bento(
     bento_name: str | Tag | None = None,
     project_path: str = ".",
     config_file: str | None = None,
-    deployment_mode: str = "standalone",
+    deployment_mode: DeploymentMode = "standalone",
     bentoml_home: str | None = None,
     grpc: bool = False,
     clean_context: contextlib.ExitStack | None = None,
@@ -387,13 +435,20 @@ def host_bento(
     Host a bentoml service, yields the host URL.
 
     Args:
-        bento: a bento tag or `module_path:service`
+        bento: a bento tag or :code:`module_path:service`
         project_path: the path to the project directory
         config_file: the path to the config file
-        deployment_mode: the deployment mode, one of `standalone`, `docker` or `distributed`
+        deployment_mode: the deployment mode, one of :code:`standalone`, :code:`docker` or :code:`distributed`
         clean_context: a contextlib.ExitStack to clean up the intermediate files,
                        like docker image and bentos. If None, it will be created. Used for reusing
                        those files in the same test session.
+        bentoml_home: if set, we will change the given BentoML home folder to :code:`bentoml_home`. Default
+                      to :code:`$HOME/bentoml`
+        grpc: if True, running gRPC tests.
+        host: set a given host for the bento, default to :code:`0.0.0.0`
+
+    Returns:
+        :obj:`str`: a generated host URL where we run the test bento.
     """
     import bentoml
 
@@ -402,6 +457,7 @@ def host_bento(
         clean_on_exit = True
     else:
         clean_on_exit = False
+
     if bentoml_home:
         from bentoml._internal.configuration.containers import BentoMLContainer
 

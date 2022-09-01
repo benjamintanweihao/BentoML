@@ -251,7 +251,7 @@ class Image(IODescriptor[ImageType]):
             )
 
     async def from_proto(self, request: pb.Request) -> ImageType:
-        from bentoml.grpc.utils.mapping import filetype_pb_to_mimetype_map
+        from bentoml.grpc.utils import filetype_pb_to_mimetype_map
 
         if self._mime_type.startswith("multipart"):
             raise UnprocessableEntity(
@@ -278,14 +278,14 @@ class Image(IODescriptor[ImageType]):
         elif request.HasField("raw_bytes_contents"):
             content = request.raw_bytes_contents
         else:
-            raise UnprocessableEntity(
+            raise InvalidArgument(
                 "Neither 'file' or 'raw_bytes_contents' field is found in the request message.",
             )
 
         return PIL.Image.open(io.BytesIO(content))
 
     async def to_proto(self, obj: ImageType) -> pb.File:
-        from bentoml.grpc.utils.mapping import mimetype_to_filetype_pb_map
+        from bentoml.grpc.utils import mimetype_to_filetype_pb_map
 
         if self._mime_type.startswith("multipart"):
             raise UnprocessableEntity(
@@ -294,7 +294,7 @@ class Image(IODescriptor[ImageType]):
 
         if LazyType["ext.NpNDArray"]("numpy.ndarray").isinstance(obj):
             image = PIL.Image.fromarray(obj, mode=self._pilmode)
-        elif LazyType[PIL.Image.Image]("PIL.Image.Image").isinstance(obj):
+        elif LazyType["PIL.Image.Image"]("PIL.Image.Image").isinstance(obj):
             image = obj
         else:
             raise InternalServerError(

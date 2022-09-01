@@ -27,12 +27,12 @@ omit = [
 show_missing = true
 precision = 2
 omit = [
-  "bentoml/**/*_pb2*.py",
-  "bentoml/_internal/external_typing/*",
-  "bentoml/_internal/types.py",
-  "bentoml/testing/*",
-  'bentoml/__main__.py',
-  "bentoml/io.py",
+  "*/bentoml/**/*_pb2*.py",
+  "*/bentoml/_internal/external_typing/*",
+  "*/bentoml/_internal/types.py",
+  "*/bentoml/testing/*",
+  '*/bentoml/__main__.py',
+  "*/bentoml/io.py",
 ]
 exclude_lines = [
   "pragma: no cover",

@@ -88,7 +88,7 @@ class Servicer:
         self.loaded = True
 
     def build_interceptors_stack(self) -> list[aio.ServerInterceptor]:
-        from .interceptors import GenericHeadersServerInterceptor
+        from bentoml.grpc.interceptors import GenericHeadersServerInterceptor
 
         stack = [
             GenericHeadersServerInterceptor,

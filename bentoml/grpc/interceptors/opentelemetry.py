@@ -22,8 +22,8 @@ from bentoml.grpc.utils import wrap_rpc_handler
 from bentoml.grpc.utils import GRPC_CONTENT_TYPE
 from bentoml.grpc.utils import parse_method_name
 
-from ....utils.pkg import get_pkg_version
-from ....configuration.containers import BentoMLContainer
+from bentoml._internal.utils.pkg import get_pkg_version
+from bentoml._internal.configuration.containers import BentoMLContainer
 
 if TYPE_CHECKING:
     from grpc.aio._typing import MetadataKey

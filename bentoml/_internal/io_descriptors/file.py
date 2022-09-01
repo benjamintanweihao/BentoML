@@ -14,6 +14,7 @@ from .base import IODescriptor
 from ..types import FileLike
 from ..utils.http import set_cookies
 from ...exceptions import BadInput
+from ...exceptions import InvalidArgument
 from ...exceptions import BentoMLException
 from ...exceptions import UnprocessableEntity
 from ..service.openapi import SUCCESS_DESCRIPTION
@@ -166,7 +167,7 @@ class File(IODescriptor[FileType]):
         return res
 
     async def to_proto(self, obj: FileType) -> pb.File:
-        from bentoml.grpc.utils.mapping import mimetype_to_filetype_pb_map
+        from bentoml.grpc.utils import mimetype_to_filetype_pb_map
 
         if self._mime_type.startswith("multipart"):
             raise UnprocessableEntity(
@@ -217,12 +218,12 @@ class BytesIOFile(File):
         )
 
     async def from_proto(self, request: pb.Request) -> FileLike[bytes]:
-        from bentoml.grpc.utils.mapping import filetype_pb_to_mimetype_map
+        from bentoml.grpc.utils import filetype_pb_to_mimetype_map
 
         if self._mime_type.startswith("multipart"):
             raise UnprocessableEntity(
                 "'multipart' Content-Type is not yet supported for parsing files in gRPC. Use Multipart() instead."
-            )
+            ) from None
 
         mapping = filetype_pb_to_mimetype_map()
 
@@ -239,13 +240,13 @@ class BytesIOFile(File):
                 except KeyError:
                     raise BadInput(
                         f"{field.kind} is not a valid File kind. Accepted file kind: {set(mapping)}",
-                    )
+                    ) from None
             content = field.content
         elif request.HasField("raw_bytes_contents"):
             content = request.raw_bytes_contents
         else:
-            raise UnprocessableEntity(
+            raise InvalidArgument(
                 "Neither 'file' or 'raw_bytes_contents' field is found in the request message.",
-            )
+            ) from None
 
         return FileLike[bytes](io.BytesIO(content), "<content>")

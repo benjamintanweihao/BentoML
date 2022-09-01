@@ -77,12 +77,12 @@ class GRPCAppFactory:
     def interceptors(self) -> Interceptors:
         # Note that order of interceptors is important here.
 
-        from .grpc.interceptors.opentelemetry import AsyncOpenTelemetryServerInterceptor
+        from bentoml.grpc.interceptors.opentelemetry import AsyncOpenTelemetryServerInterceptor
 
         interceptors: Interceptors = [AsyncOpenTelemetryServerInterceptor]
 
         if self.enable_metrics:
-            from .grpc.interceptors.prometheus import PrometheusServerInterceptor
+            from bentoml.grpc.interceptors import PrometheusServerInterceptor
 
             interceptors.append(
                 partial(
@@ -92,7 +92,7 @@ class GRPCAppFactory:
             )
 
         if BentoMLContainer.api_server_config.logging.access.enabled.get():
-            from .grpc.interceptors.access import AccessLogServerInterceptor
+            from bentoml.grpc.interceptors.access import AccessLogServerInterceptor
 
             access_logger = logging.getLogger("bentoml.access")
             if access_logger.getEffectiveLevel() <= logging.INFO:

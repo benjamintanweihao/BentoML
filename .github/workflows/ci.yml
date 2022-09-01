@@ -178,7 +178,8 @@ jobs:
       - name: Generate gRPC stubs
         run: |
           pip install "grpcio-tools>=1.41" mypy-protobuf
-          python -m grpc_tools.protoc -I. --grpc_python_out=. --python_out=. --mypy_out=. --mypy_grpc_out=. bentoml/grpc/v1alpha1/service.proto bentoml/grpc/v1alpha1/service_test.proto
+          python -m grpc_tools.protoc -I. --grpc_python_out=. --python_out=. --mypy_out=. --mypy_grpc_out=. bentoml/grpc/v1alpha1/service.proto
+          python -m grpc_tools.protoc -I. --grpc_python_out=. --python_out=. --mypy_out=. --mypy_grpc_out=. bentoml/grpc/v1alpha1/service_test.proto
 
       - name: Install dependencies
         run: |
@@ -275,7 +276,7 @@ jobs:
       - name: Upload test coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
-          flags: e2e-tests-%{{ matrix.server_type }}
+          flags: e2e-tests-${{ matrix.server_type }}
           name: codecov-${{ matrix.os }}-python${{ matrix.python-version }}-e2e
           fail_ci_if_error: true
           directory: ./

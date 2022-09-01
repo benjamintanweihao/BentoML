@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
 from _servicer import TestServiceServicer
-from PIL.Image import fromarray
 from _interceptor import AsyncContextInterceptor
 
 import bentoml
@@ -20,7 +19,7 @@ from bentoml._internal.utils import LazyLoader
 if TYPE_CHECKING:
     import numpy as np
     import pandas as pd
-    from PIL.Image import Image as PILImage
+    import PIL.Image
     from numpy.typing import NDArray
 
     from bentoml.grpc.v1alpha1 import service_test_pb2 as pb_test
@@ -54,6 +53,8 @@ else:
     pb_test, services_test = import_generated_stubs(file="service_test.proto")
     np = LazyLoader("np", globals(), "numpy")
     pd = LazyLoader("pd", globals(), "pandas")
+    PIL = LazyLoader("PIL", globals(), "PIL")
+    PIL.Image = LazyLoader("PIL.Image", globals(), "PIL.Image")
 
 
 py_model = t.cast(
@@ -72,12 +73,6 @@ svc.mount_grpc_servicer(
 svc.add_grpc_interceptor(AsyncContextInterceptor, usage="NLP", accuracy_score=0.8247)
 
 
-@svc.api(input=JSON(), output=JSON())
-async def echo_json(json_obj: JSONSerializable) -> JSONSerializable:
-    batched = await py_model.echo_json.async_run([json_obj])
-    return batched[0]
-
-
 class IrisFeatures(BaseModel):
     sepal_len: float
     sepal_width: float
@@ -88,6 +83,12 @@ class IrisFeatures(BaseModel):
 class IrisClassificationRequest(BaseModel):
     request_id: str
     iris_features: IrisFeatures
+
+
+@svc.api(input=JSON(), output=JSON())
+async def echo_json(json_obj: JSONSerializable) -> JSONSerializable:
+    batched = await py_model.echo_json.async_run([json_obj])
+    return batched[0]
 
 
 @svc.api(
@@ -130,9 +131,9 @@ async def predict_file(f: FileLike[bytes]) -> bytes:
     return batch_ret[0]
 
 
-@svc.api(input=Image(), output=Image(mime_type="image/bmp"))
-async def echo_image(f: PILImage) -> NDArray[t.Any]:
-    assert isinstance(f, PILImage)
+@svc.api(input=Image(mime_type="image/bmp"), output=Image(mime_type="image/bmp"))
+async def echo_image(f: PIL.Image.Image) -> NDArray[t.Any]:
+    assert isinstance(f, PIL.Image.Image)
     return np.array(f)
 
 
@@ -156,5 +157,5 @@ async def predict_multi_images(original: Image, compared: Image):
     output_array = await py_model.multiply_float_ndarray.async_run(
         np.array(original), np.array(compared)
     )
-    img = fromarray(output_array)
+    img = PIL.Image.fromarray(output_array)
     return {"r1": img, "r2": img}

@@ -607,7 +607,6 @@ class PandasDataFrame(IODescriptor["ext.PdDataFrame"]):
             raise InvalidArgument(
                 f"Unknown serialization format ({self._default_format})."
             )
-        print(resp)
 
         series_list = []
         for col in resp.columns:

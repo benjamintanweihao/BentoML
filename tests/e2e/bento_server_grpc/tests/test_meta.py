@@ -16,3 +16,4 @@ async def test_success_invocation_custom_servicer(host: str) -> None:
         request = pb_test.ExecuteRequest(input="BentoML")
         resp: pb_test.ExecuteResponse = await stub.Execute(request)
         assert resp.output == "Hello, BentoML!"
+    await channel.close()
