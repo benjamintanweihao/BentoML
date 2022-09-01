@@ -332,9 +332,11 @@ class JSON(IODescriptor[JSONType]):
         if LazyType["pydantic.BaseModel"]("pydantic.BaseModel").isinstance(obj):
             obj = obj.dict()
 
+        from google.protobuf.json_format import Parse
+
         msg = struct_pb2.Value()
         if obj:
-            msg.MergeFromString(
+            Parse(
                 json.dumps(
                     obj,
                     cls=self._json_encoder,
@@ -342,7 +344,8 @@ class JSON(IODescriptor[JSONType]):
                     allow_nan=False,
                     indent=None,
                     separators=(",", ":"),
-                ).encode("utf-8")
+                ).encode("utf-8"),
+                msg,
             )
 
         return msg

@@ -4,7 +4,6 @@ import io
 import typing as t
 import logging
 import functools
-import importlib.util
 from enum import Enum
 from typing import TYPE_CHECKING
 
@@ -13,6 +12,7 @@ from starlette.responses import Response
 
 from .base import IODescriptor
 from ..types import LazyType
+from ..utils.pkg import find_spec
 from ..utils.http import set_cookies
 from ...exceptions import BadInput
 from ...exceptions import InvalidArgument
@@ -42,8 +42,9 @@ else:
         "pd",
         globals(),
         "pandas",
-        exc_msg="'pandas' is required to use PandasDataFrame or PandasSeries. Install with 'pip install -U pandas'",
+        exc_msg='pandas" is required to use PandasDataFrame or PandasSeries. Install with "pip install -U pandas"',
     )
+    np = LazyLoader("np", globals(), "numpy")
 
 logger = logging.getLogger(__name__)
 
@@ -62,9 +63,9 @@ def pddtype_to_fieldpb_map() -> dict[ext.NpDTypeLike, str]:
 # Check for parquet support
 @functools.lru_cache(maxsize=1)
 def get_parquet_engine() -> str:
-    if importlib.util.find_spec("pyarrow") is not None:
+    if find_spec("pyarrow") is not None:
         return "pyarrow"
-    elif importlib.util.find_spec("fastparquet") is not None:
+    elif find_spec("fastparquet") is not None:
         return "fastparquet"
     else:
         logger.warning(
@@ -592,17 +593,24 @@ class PandasDataFrame(IODescriptor["ext.PdDataFrame"]):
             ``service_pb2.Response``:
                 Protobuf representation of given ``pandas.DataFrame``
         """
-        import numpy as np
-
-        from bentoml.grpc.utils.mapping import pddtype_to_fieldpb_map
-
         if not LazyType["ext.PdDataFrame"](pd.DataFrame).isinstance(obj):
             raise InvalidArgument(
                 f"return object is not of type `pd.DataFrame`, got type {type(obj)} instead"
             )
+        if self._default_format == SerializationFormat.JSON:
+            resp = obj.to_json(orient="columns")
+        elif self._default_format == SerializationFormat.PARQUET:
+            resp = obj.to_parquet(engine=get_parquet_engine())
+        elif self._default_format == SerializationFormat.CSV:
+            resp = obj.to_csv()
+        else:
+            raise InvalidArgument(
+                f"Unknown serialization format ({self._default_format})."
+            )
+        print(resp)
 
         series_list = []
-        for col in obj.columns:
+        for col in resp.columns:
             if np.dtype(obj[col].dtype.char) not in pddtype_to_fieldpb_map():
                 raise UnprocessableEntity(
                     f'datatype in column "{col}" is not supported for grpc service'
