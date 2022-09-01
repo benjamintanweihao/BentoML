@@ -412,8 +412,9 @@ def containerize(
     _bento_store: BentoStore = Provide[BentoMLContainer.bento_store],
 ) -> bool:
 
-    from bentoml._internal.utils import buildx
     import psutil
+
+    from bentoml._internal.utils import buildx
 
     env = {"DOCKER_BUILDKIT": "1", "DOCKER_SCAN_SUGGEST": "false"}
 

@@ -22,7 +22,9 @@ _main() {
 		if [[ -v BENTOML_SERVE_COMPONENT ]]; then
 			echo "\$BENTOML_SERVE_COMPONENT is set! Calling 'bentoml start-*' instead"
 			if [ "${BENTOML_SERVE_COMPONENT}" = 'http_server' ]; then
-				set -- bentoml start-rest-server "$@" "$BENTO_PATH"
+				set -- bentoml start-http-server "$@" "$BENTO_PATH"
+			elif [ "${BENTOML_SERVE_COMPONENT}" = 'grpc_server' ]; then
+				set -- bentoml start-grpc-server "$@" "$BENTO_PATH"
 			elif [ "${BENTOML_SERVE_COMPONENT}" = 'runner' ]; then
 				set -- bentoml start-runner-server "$@" "$BENTO_PATH"
 			fi
