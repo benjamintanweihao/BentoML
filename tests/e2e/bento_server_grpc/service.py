@@ -46,6 +46,7 @@ if TYPE_CHECKING:
         double_dataframe_column: RunnerMethod[
             RunnableImpl, [pd.DataFrame], pd.DataFrame
         ]
+        echo_dataframe: RunnerMethod[RunnableImpl, [pd.DataFrame], pd.DataFrame]
 
 else:
     from bentoml.grpc.utils import import_generated_stubs
@@ -123,6 +124,24 @@ async def echo_ndarray_enforce_shape(arr: NDArray[t.Any]) -> NDArray[t.Any]:
 async def echo_ndarray_enforce_dtype(arr: NDArray[t.Any]) -> NDArray[t.Any]:
     assert arr.dtype == np.float32
     return await py_model.echo_ndarray.async_run(arr)
+
+
+@svc.api(input=PandasDataFrame(), output=PandasDataFrame())
+async def echo_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    assert isinstance(df, pd.DataFrame)
+    return df
+
+
+@svc.api(
+    input=PandasDataFrame.from_sample(
+        pd.DataFrame({"age": [3, 29], "height": [94, 170], "weight": [31, 115]}),
+        orient="columns",
+    ),
+    output=PandasDataFrame(),
+)
+async def echo_dataframe_from_sample(df: pd.DataFrame) -> pd.DataFrame:
+    assert isinstance(df, pd.DataFrame)
+    return df
 
 
 @svc.api(input=File(), output=File())

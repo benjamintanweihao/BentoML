@@ -16,6 +16,7 @@ from ..utils.pkg import find_spec
 from ..utils.http import set_cookies
 from ...exceptions import BadInput
 from ...exceptions import InvalidArgument
+from ...exceptions import InternalServerError
 from ...exceptions import UnprocessableEntity
 from ...exceptions import MissingDependencyException
 from ..service.openapi import SUCCESS_DESCRIPTION
@@ -268,8 +269,8 @@ class PandasDataFrame(IODescriptor["ext.PdDataFrame"]):
     def __init__(
         self,
         orient: ext.DataFrameOrient = "records",
-        apply_column_names: bool = False,
         columns: list[str] | None = None,
+        apply_column_names: bool = False,
         dtype: bool | dict[str, t.Any] | None = None,
         enforce_dtype: bool = False,
         shape: tuple[int, ...] | None = None,
@@ -341,13 +342,6 @@ class PandasDataFrame(IODescriptor["ext.PdDataFrame"]):
         _validate_serialization_format(serialization_format)
 
         obj = await request.body()
-        if self._enforce_dtype:
-            if self._dtype is None:
-                logger.warning(
-                    "`dtype` is None or undefined, while `enforce_dtype`=True"
-                )
-            # TODO(jiang): check dtype
-
         if serialization_format is SerializationFormat.JSON:
             res = pd.read_json(io.BytesIO(obj), dtype=self._dtype, orient=self._orient)
         elif serialization_format is SerializationFormat.PARQUET:
@@ -360,30 +354,7 @@ class PandasDataFrame(IODescriptor["ext.PdDataFrame"]):
             )
 
         assert isinstance(res, pd.DataFrame)
-
-        if self._apply_column_names:
-            if self._columns is None:
-                logger.warning(
-                    "`columns` is None or undefined, while `apply_column_names`=True"
-                )
-            elif len(self._columns) != res.shape[1]:
-                raise BadInput(
-                    "length of `columns` does not match the columns of incoming data"
-                )
-            else:
-                res.columns = pd.Index(self._columns)
-        if self._enforce_shape:
-            if self._shape is None:
-                logger.warning(
-                    "`shape` is None or undefined, while `enforce_shape`=True"
-                )
-            else:
-                assert all(
-                    left == right
-                    for left, right in zip(self._shape, res.shape)  # type: ignore (shape type)
-                    if left != -1 and right != -1
-                ), f"incoming has shape {res.shape} where enforced shape to be {self._shape}"
-        return res
+        return self.validate_dataframe(res)
 
     async def to_http_response(
         self, obj: ext.PdDataFrame, ctx: Context | None = None
@@ -398,6 +369,7 @@ class PandasDataFrame(IODescriptor["ext.PdDataFrame"]):
             HTTP Response of type `starlette.responses.Response`. This can
              be accessed via cURL or any external web traffic.
         """
+        obj = self.validate_dataframe(obj, exception_cls=InternalServerError)
 
         # For the response it doesn't make sense to enforce the same serialization format as specified
         # by the request's headers['content-type']. Instead we simply use the _default_format.
@@ -495,14 +467,51 @@ class PandasDataFrame(IODescriptor["ext.PdDataFrame"]):
             apply_column_names=apply_column_names,
             columns=columns,
             enforce_dtype=enforce_dtype,
-            dtype=None,  # TODO: not breaking atm
+            dtype=sample_input.dtypes,
             default_format=default_format,
         )
         inst.sample_input = sample_input
 
         return inst
 
-    async def from_proto(self, request: pb.Request) -> ext.PdDataFrame:
+    def validate_dataframe(
+        self, dataframe: ext.PdDataFrame, exception_cls: t.Type[Exception] = BadInput
+    ) -> ext.PdDataFrame:
+
+        if not LazyType["ext.PdDataFrame"]("pd.DataFrame").isinstance(dataframe):
+            raise InvalidArgument(
+                f"return object is not of type `pd.DataFrame`, got type {type(dataframe)} instead"
+            ) from None
+
+        # TODO: dtype check
+        if self._dtype is not None and self._dtype != dataframe.dtypes:
+            msg = f'{self.__class__.__name__}: Expecting DataFrame of dtype "{self._dtype}", but "{dataframe.dtypes}" was received.'
+            if self._enforce_dtype:
+                raise exception_cls(msg) from None
+
+        if self._columns is not None and len(self._columns) != dataframe.shape[1]:
+            msg = f"length of 'columns' ({len(self._columns)}) does not match the # of columns of incoming data."
+            if self._apply_column_names:
+                raise BadInput(msg) from None
+            else:
+                logger.debug(msg)
+                dataframe.columns = pd.Index(self._columns)
+
+        # TODO: convert from wide to long format (melt())
+        if self._shape is not None and self._shape != dataframe.shape:
+            msg = f'{self.__class__.__name__}: Expecting DataFrame of shape "{self._shape}", but "{dataframe.shape}" was received.'
+            if self._enforce_shape and not all(
+                left == right
+                for left, right in zip(self._shape, dataframe.shape)
+                if left != -1 and right != -1
+            ):
+                raise exception_cls(msg) from None
+
+        return dataframe
+
+    async def from_proto(
+        self, field: pb.DataFrame | bytes, *, _use_raw_bytes_contents: bool = False
+    ) -> ext.PdDataFrame:
         """
         Process incoming protobuf request and convert it to ``pandas.DataFrame``
 
@@ -514,32 +523,20 @@ class PandasDataFrame(IODescriptor["ext.PdDataFrame"]):
             a ``pandas.DataFrame`` object. This can then be used
              inside users defined logics.
         """
+        # TODO: support different serialization format
         contents = {}
-        if request.HasField("dataframe"):
+        if not _use_raw_bytes_contents:
+            assert isinstance(field, pb.DataFrame)
             if self._orient != "columns":
                 raise BadInput(
-                    'Currently using `dataframe` field only supports columns orient. Try using `orient = "columns"` in service definition or `raw_bytes_contents` field instead.'
-                )
+                    f"'dataframe' field currently only supports 'columns' orient. Use either 'orient=columns' in {self.__class__.__name__} or 'raw_bytes_contents' field instead."
+                ) from None
 
-            column_names = request.dataframe.column_names
-            column_values = request.dataframe.columns
+            column_names = field.column_names
+            columns = field.columns
 
-            # try to use provided `self._columns` if `self._apply_column_names` is true
-            if self._apply_column_names:
-                if self._columns is None:
-                    logger.warning(
-                        "`columns` is None or undefined, while `apply_column_names`=True"
-                    )
-                else:
-                    column_names = self._columns
-
-            if len(column_names) != len(column_values):
-                raise UnprocessableEntity(
-                    "The length `column_names` provided doesn't match the length of `column` series contents."
-                )
-
-            # contents(column orient) { column_name : {index : columns.series._value}}
-            for index, content in enumerate(column_values):
+            # columns orient: { column_name : {index : columns.series._value}}
+            for index, content in enumerate(columns):
                 fieldpb = [
                     f.name
                     for f, _ in content.ListFields()
@@ -553,34 +550,16 @@ class PandasDataFrame(IODescriptor["ext.PdDataFrame"]):
                 contents[column_names[index]] = {
                     idx: content for idx, content in enumerate(series_contents)
                 }
-
-        elif request.HasField("raw_bytes_contents"):
+        else:
+            assert isinstance(field, bytes)
             # TODO: handle raw_bytes_contents for dataframe
-            pass
 
-        # try to use provided `self._dtype` if `self._enforce_dtype` is true
-        dtype = None
-        if self._enforce_dtype:
-            if self._dtype is None:
-                raise UnprocessableEntity(
-                    "`dtype` is None or undefined, while `enforce_dtype`=True"
-                )
-            dtype = self._dtype
+        if self._dtype is not None:
+            dataframe = pd.DataFrame(contents, dtype=self._dtype)
+        else:
+            dataframe = pd.DataFrame(contents)
 
-        res = pd.DataFrame(contents, dtype=dtype)
-        if self._enforce_shape:
-            if self._shape is None:
-                logger.warning(
-                    "`shape` is None or undefined, while `enforce_shape=True`"
-                )
-            else:
-                assert all(
-                    left == right
-                    for left, right in zip(self._shape, res.shape)  # type: ignore (shape type)
-                    if left != -1 and right != -1
-                ), f"incoming has shape {res.shape} where enforced shape to be {self._shape}"
-
-        return res
+        return self.validate_dataframe(dataframe)
 
     async def to_proto(self, obj: ext.PdDataFrame) -> pb.DataFrame:
         """
@@ -593,20 +572,8 @@ class PandasDataFrame(IODescriptor["ext.PdDataFrame"]):
             ``service_pb2.Response``:
                 Protobuf representation of given ``pandas.DataFrame``
         """
-        if not LazyType["ext.PdDataFrame"](pd.DataFrame).isinstance(obj):
-            raise InvalidArgument(
-                f"return object is not of type `pd.DataFrame`, got type {type(obj)} instead"
-            )
-        if self._default_format == SerializationFormat.JSON:
-            resp = obj.to_json(orient="columns")
-        elif self._default_format == SerializationFormat.PARQUET:
-            resp = obj.to_parquet(engine=get_parquet_engine())
-        elif self._default_format == SerializationFormat.CSV:
-            resp = obj.to_csv()
-        else:
-            raise InvalidArgument(
-                f"Unknown serialization format ({self._default_format})."
-            )
+        # TODO: support different serialization format
+        obj = self.validate_dataframe(obj, exception_cls=InternalServerError)
 
         series_list = []
         for col in resp.columns:

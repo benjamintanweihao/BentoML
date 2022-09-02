@@ -117,5 +117,4 @@ catboost_info
 
 # generated stub that is included in distribution
 *_pb2*.py
-# also ignore generated stubs for typing
-bentoml/grpc/**/*.pyi
+*_pb2*.pyi

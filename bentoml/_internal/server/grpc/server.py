@@ -46,10 +46,6 @@ class Server:
     def __init__(self, config: Config):
         self.config = config
         self.servicer = config.servicer
-
-        # define a cleanup future list
-        self.cleanup_tasks: list[t.Coroutine[t.Any, t.Any, None]] = []
-
         self.loaded = False
 
     @cached_property
@@ -86,21 +82,17 @@ class Server:
             self.loop.run_until_complete(self.serve())
         finally:
             try:
-                if self.cleanup_tasks:
-                    self.loop.run_until_complete(*self.cleanup_tasks)
-                    self.loop.close()
+                self.loop.call_soon_threadsafe(
+                    lambda: asyncio.ensure_future(self.shutdown())
+                )
             except Exception as e:  # pylint: disable=broad-except
                 raise RuntimeError(
                     f"Server failed unexpectedly. enable GRPC_VERBOSITY=debug for more information: {e}"
-                ) from e
+                ) from None
 
     async def serve(self) -> None:
         self.add_insecure_port(self.config.bind_address)
-
         await self.startup()
-
-        self.cleanup_tasks.append(self.shutdown())
-
         await self.wait_for_termination()
 
     async def startup(self) -> None:
@@ -108,7 +100,6 @@ class Server:
 
         # Running on_startup callback.
         await self.servicer.startup()
-
         # register bento servicer
         services.add_BentoServiceServicer_to_server(
             self.servicer.bento_servicer, self.server
@@ -118,7 +109,6 @@ class Server:
         )
 
         service_names = self.servicer.service_names
-
         # register custom servicer
         for (
             user_servicer,
@@ -144,15 +134,14 @@ class Server:
             await self.servicer.health_servicer.set(
                 service, pb_health.HealthCheckResponse.SERVING  # type: ignore (no types available)
             )
-
         await self.server.start()
 
     async def shutdown(self):
         # Running on_startup callback.
         await self.servicer.shutdown()
-
         await self.server.stop(grace=self.config.graceful_shutdown_timeout)
         await self.servicer.health_servicer.enter_graceful_shutdown()
+        self.loop.stop()
 
     async def wait_for_termination(self, timeout: int | None = None) -> bool:
         return await self.server.wait_for_termination(timeout=timeout)

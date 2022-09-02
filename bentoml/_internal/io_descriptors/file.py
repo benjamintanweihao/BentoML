@@ -14,7 +14,6 @@ from .base import IODescriptor
 from ..types import FileLike
 from ..utils.http import set_cookies
 from ...exceptions import BadInput
-from ...exceptions import InvalidArgument
 from ...exceptions import BentoMLException
 from ...exceptions import UnprocessableEntity
 from ..service.openapi import SUCCESS_DESCRIPTION
@@ -172,7 +171,7 @@ class File(IODescriptor[FileType]):
         if self._mime_type.startswith("multipart"):
             raise UnprocessableEntity(
                 "'multipart' Content-Type is not yet supported for parsing files in gRPC. Use Multipart() instead."
-            )
+            ) from None
 
         if isinstance(obj, bytes):
             body = obj
@@ -184,9 +183,19 @@ class File(IODescriptor[FileType]):
         except KeyError:
             raise UnprocessableEntity(
                 f"{self._mime_type} doesn't have a corresponding File 'kind'"
-            )
+            ) from None
 
         return pb.File(kind=kind, content=body)
+
+    if TYPE_CHECKING:
+
+        async def from_proto(
+            self, field: pb.File | bytes, *, _use_raw_bytes_contents: bool = False
+        ) -> FileLike[bytes]:
+            ...
+
+        async def from_http_request(self, request: Request) -> t.IO[bytes]:
+            ...
 
 
 class BytesIOFile(File):
@@ -217,7 +226,9 @@ class BytesIOFile(File):
             f"File should have Content-Type '{self._mime_type}' or 'multipart/form-data', got {content_type} instead"
         )
 
-    async def from_proto(self, request: pb.Request) -> FileLike[bytes]:
+    async def from_proto(
+        self, field: pb.File | bytes, *, _use_raw_bytes_contents: bool = False
+    ) -> FileLike[bytes]:
         from bentoml.grpc.utils import filetype_pb_to_mimetype_map
 
         if self._mime_type.startswith("multipart"):
@@ -228,8 +239,8 @@ class BytesIOFile(File):
         mapping = filetype_pb_to_mimetype_map()
 
         # check if the request message has the correct field
-        if request.HasField("file"):
-            field = request.file
+        if not _use_raw_bytes_contents:
+            assert isinstance(field, pb.File)
             if field.kind:
                 try:
                     mime_type = mapping[field.kind]
@@ -242,11 +253,8 @@ class BytesIOFile(File):
                         f"{field.kind} is not a valid File kind. Accepted file kind: {set(mapping)}",
                     ) from None
             content = field.content
-        elif request.HasField("raw_bytes_contents"):
-            content = request.raw_bytes_contents
         else:
-            raise InvalidArgument(
-                "Neither 'file' or 'raw_bytes_contents' field is found in the request message.",
-            ) from None
+            assert isinstance(field, bytes)
+            content = field
 
         return FileLike[bytes](io.BytesIO(content), "<content>")

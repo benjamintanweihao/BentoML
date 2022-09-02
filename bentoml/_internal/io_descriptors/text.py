@@ -7,7 +7,6 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from bentoml.exceptions import BentoMLException
-from bentoml.exceptions import UnprocessableEntity
 
 from .base import IODescriptor
 from ..utils.http import set_cookies
@@ -21,14 +20,8 @@ from ..service.openapi.specification import RequestBody
 if TYPE_CHECKING:
     from google.protobuf import wrappers_pb2
 
-    from bentoml.grpc.v1alpha1 import service_pb2 as pb
-
     from ..context import InferenceApiContext as Context
 else:
-    from bentoml.grpc.utils import import_generated_stubs
-
-    pb, _ = import_generated_stubs()
-
     wrappers_pb2 = LazyLoader("wrappers_pb2", globals(), "google.protobuf.wrappers_pb2")
 
 MIME_TYPE = "text/plain"
@@ -145,15 +138,18 @@ class Text(IODescriptor[str]):
         else:
             return Response(obj, media_type=MIME_TYPE)
 
-    async def from_proto(self, request: pb.Request) -> str:
-        if request.HasField("text"):
-            return request.text.value
-        elif request.HasField("raw_bytes_contents"):
-            return request.raw_bytes_contents.decode("utf-8")
+    async def from_proto(
+        self,
+        field: wrappers_pb2.StringValue | bytes,
+        *,
+        _use_raw_bytes_contents: bool = False,
+    ) -> str:
+        if not _use_raw_bytes_contents:
+            assert isinstance(field, wrappers_pb2.StringValue)
+            return field.value
         else:
-            raise UnprocessableEntity(
-                "Neither 'text' or 'raw_bytes_contents' is found is request message."
-            )
+            assert isinstance(field, bytes)
+            return field.decode("utf-8")
 
     async def to_proto(self, obj: str) -> wrappers_pb2.StringValue:
         return wrappers_pb2.StringValue(value=obj)

@@ -30,7 +30,7 @@ class Config:
         maximum_concurrent_rpcs: int
         | None = Provide[BentoMLContainer.grpc.maximum_concurrent_rpcs],
         migration_thread_pool_workers: int = 1,
-        graceful_shutdown_timeout: float = 5.0,
+        graceful_shutdown_timeout: float | None = None,
     ) -> None:
         self.servicer = servicer
 

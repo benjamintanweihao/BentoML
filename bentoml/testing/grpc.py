@@ -2,31 +2,31 @@ from __future__ import annotations
 
 import typing as t
 import traceback
-from typing import overload
 from typing import TYPE_CHECKING
 from contextlib import asynccontextmanager
 
 from bentoml._internal.utils import LazyLoader
+from bentoml.grpc.interceptors.client import AssertClientInterceptor
 
 if TYPE_CHECKING:
+    import grpc
     import numpy as np
     from grpc import aio
     from numpy.typing import NDArray  # pylint: disable=unused-import
-    from grpc_health.v1 import health_pb2_grpc as services_health
+    from grpc.aio._channel import Channel
     from google.protobuf.message import Message
 
     from bentoml import Service
+    from bentoml.grpc.types import BentoUnaryUnaryCall
     from bentoml.grpc.v1alpha1 import service_pb2 as pb
-    from bentoml.grpc.v1alpha1 import service_pb2_grpc as services
-
-    S = t.TypeVar("S", bound=t.Any)
 else:
     from bentoml.grpc.utils import import_generated_stubs
 
-    pb, services = import_generated_stubs()
+    pb, _ = import_generated_stubs()
     exception_msg = (
         "'grpcio' is not installed. Please install it with 'pip install -U grpcio'"
     )
+    grpc = LazyLoader("grpc", globals(), "grpc", exc_msg=exception_msg)
     aio = LazyLoader("aio", globals(), "grpc.aio", exc_msg=exception_msg)
     np = LazyLoader("np", globals(), "numpy")
 
@@ -40,53 +40,59 @@ def make_pb_ndarray(shape: tuple[int, ...]) -> pb.NDArray:
 
 async def async_client_call(
     method: str,
-    stub: services.BentoServiceStub,
+    channel: Channel,
     data: dict[str, Message | bytes | str | dict[str, t.Any]],
     assert_data: pb.Response | t.Callable[[pb.Response], bool] | None = None,
+    assert_code: grpc.StatusCode | None = None,
+    assert_details: str | None = None,
     timeout: int | None = None,
     sanity: bool = True,
 ) -> pb.Response:
-    req = pb.Request(api_name=method, **data)
-    output: pb.Response = await stub.Call(req, timeout=timeout)
-    if sanity:
-        assert output
-    if assert_data:
-        try:
-            if callable(assert_data):
-                assert assert_data(output)
-            else:
-                assert output == assert_data
-        except AssertionError:
-            raise AssertionError(f"Failed while checking data: {output}")
-    return output
-
-
-@overload
-async def make_client(
-    host_url: str, stubs: t.Type[services.BentoServiceStub]
-) -> t.AsyncGenerator[services.BentoServiceStub, None]:
-    ...
-
-
-@overload
-async def make_client(
-    host_url: str, stubs: t.Type[services_health.HealthStub]
-) -> t.AsyncGenerator[services_health.HealthStub, None]:
-    ...
+    if assert_code is None:
+        # by default, we want to check if the request is healthy
+        assert_code = grpc.StatusCode.OK
+    try:
+        # we will handle adding our testing interceptors here.
+        # note that we shouldn't use private imports, but this will do
+        channel._unary_unary_interceptors.append(  # type: ignore (private warning)
+            AssertClientInterceptor(
+                assert_code=assert_code, assert_details=assert_details
+            )
+        )
+        Call = channel.unary_unary(
+            "/bentoml.grpc.v1alpha1.BentoService/Call",
+            request_serializer=pb.Request.SerializeToString,
+            response_deserializer=pb.Response.FromString,
+        )
+        output = await t.cast(
+            t.Awaitable[pb.Response],
+            Call(pb.Request(api_name=method, **data), timeout=timeout),
+        )
+        if sanity:
+            assert output
+        if assert_data:
+            try:
+                if callable(assert_data):
+                    assert assert_data(output)
+                else:
+                    assert output == assert_data
+            except AssertionError:
+                raise AssertionError(
+                    f"Failed while checking data: {output.SerializeToString()}"
+                )
+        return output
+    finally:
+        # we will reset interceptors per call
+        channel._unary_unary_interceptors = []  # type: ignore (private warning)
 
 
 @asynccontextmanager
-async def make_client(
-    host_url: str, stubs: t.Type[S] = None
-) -> t.AsyncGenerator[S, None]:
-    if stubs is None:
-        stubs = services.BentoServiceStub  # type: ignore (not yet supported)
-    assert stubs
+async def create_channel(host_url: str) -> t.AsyncGenerator[Channel, None]:
     try:
         async with aio.insecure_channel(host_url) as channel:
             # create a blocking call to wait til channel is ready.
             await channel.channel_ready()
-            yield stubs(channel)
+            yield channel
         await channel.close()
     except aio.AioRpcError as e:
         traceback.print_exc()

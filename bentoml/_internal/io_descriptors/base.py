@@ -10,6 +10,8 @@ if TYPE_CHECKING:
     from types import UnionType
 
     from google.protobuf import message
+    from google.protobuf import struct_pb2
+    from google.protobuf import wrappers_pb2
     from typing_extensions import Self
     from starlette.requests import Request
     from starlette.responses import Response
@@ -105,21 +107,67 @@ class IODescriptor(ABC, t.Generic[IOType]):
 
     @overload
     @abstractmethod
-    async def from_proto(self, request: pb.Part) -> IOType:
+    async def from_proto(
+        self, field: wrappers_pb2.StringValue | bytes, *, _use_raw_bytes_contents: bool
+    ) -> IOType:
         ...
 
     @overload
     @abstractmethod
-    async def from_proto(self, request: pb.Response) -> IOType:
+    async def from_proto(
+        self, field: struct_pb2.Value | bytes, *, _use_raw_bytes_contents: bool
+    ) -> IOType:
         ...
 
     @overload
     @abstractmethod
-    async def from_proto(self, request: pb.Request) -> IOType:
+    async def from_proto(
+        self, field: pb.Part | bytes, *, _use_raw_bytes_contents: bool
+    ) -> IOType:
+        ...
+
+    @overload
+    @abstractmethod
+    async def from_proto(
+        self, field: MessageMap[str, pb.Part], *, _use_raw_bytes_contents: bool
+    ) -> IOType:
+        ...
+
+    @overload
+    @abstractmethod
+    async def from_proto(
+        self, field: pb.NDArray | bytes, *, _use_raw_bytes_contents: bool
+    ) -> IOType:
+        ...
+
+    @overload
+    @abstractmethod
+    async def from_proto(
+        self, field: pb.File | bytes, *, _use_raw_bytes_contents: bool
+    ) -> IOType:
+        ...
+
+    @overload
+    @abstractmethod
+    async def from_proto(
+        self, field: pb.DataFrame | bytes, *, _use_raw_bytes_contents: bool
+    ) -> IOType:
+        ...
+
+    @overload
+    @abstractmethod
+    async def from_proto(
+        self, field: pb.Series | bytes, *, _use_raw_bytes_contents: bool
+    ) -> IOType:
         ...
 
     @abstractmethod
-    async def from_proto(self, request: message.Message) -> IOType:
+    async def from_proto(
+        self,
+        field: message.Message | bytes | MessageMap[str, pb.Part],
+        *,
+        _use_raw_bytes_contents: bool = False,
+    ) -> IOType:
         ...
 
     @abstractmethod

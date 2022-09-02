@@ -26,7 +26,6 @@ from bentoml._internal.utils.platform import kill_subprocess_tree
 if TYPE_CHECKING:
     from grpc import aio
     from grpc_health.v1 import health_pb2 as pb_health
-    from grpc_health.v1 import health_pb2_grpc as services_health
     from aiohttp.typedefs import LooseHeaders
     from starlette.datastructures import Headers
     from starlette.datastructures import FormData
@@ -36,9 +35,6 @@ if TYPE_CHECKING:
     DeploymentMode = t.Literal["standalone", "distributed", "docker"]
 else:
     pb_health = LazyLoader("pb_health", globals(), "grpc_health.v1.health_pb2")
-    services_health = LazyLoader(
-        "services_health", globals(), "grpc_health.v1.health_pb2_grpc"
-    )
     aio = LazyLoader("aio", globals(), "grpc.aio")
 
 
@@ -121,21 +117,25 @@ async def grpc_server_warmup(
     popen: subprocess.Popen[t.Any] | None = None,
     service_name: str = "bentoml.grpc.v1alpha1.BentoService",
 ) -> bool:
-    from bentoml.testing.grpc import make_client
+    from bentoml.testing.grpc import create_channel
 
     start_time = time.time()
     print("Waiting for host %s to be ready.." % host_url)
     while time.time() - start_time < timeout:
         try:
-            async with make_client(host_url, stubs=services_health.HealthStub) as client:  # type: ignore (no infer types)
-                if TYPE_CHECKING:
-                    client = t.cast(services_health.HealthStub, client)
-
-                resp: pb_health.HealthCheckResponse = await client.Check(
-                    pb_health.HealthCheckRequest(service=service_name),
-                    timeout=timeout,
+            async with create_channel(host_url) as channel:
+                Check = channel.unary_unary(
+                    "/grpc.health.v1.Health/Check",
+                    request_serializer=pb_health.HealthCheckRequest.SerializeToString,  # type: ignore (no grpc_health type)
+                    response_deserializer=pb_health.HealthCheckResponse.FromString,  # type: ignore (no grpc_health type)
                 )
-                print(resp)
+                resp = await t.cast(
+                    t.Awaitable[pb_health.HealthCheckResponse],
+                    Check(
+                        pb_health.HealthCheckRequest(service=service_name),
+                        timeout=timeout,
+                    ),
+                )
                 if popen and popen.poll() is not None:
                     return False
                 elif resp.status == pb_health.HealthCheckResponse.SERVING:

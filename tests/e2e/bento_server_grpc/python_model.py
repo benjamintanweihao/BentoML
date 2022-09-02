@@ -39,3 +39,6 @@ class PythonFunction:
     def double_dataframe_column(self, df: pd.DataFrame) -> pd.DataFrame:
         assert isinstance(df, pd.DataFrame)
         return df[["col1"]] * 2
+
+    def echo_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
+        return df

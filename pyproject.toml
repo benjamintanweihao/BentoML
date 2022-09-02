@@ -59,7 +59,6 @@ exclude = '''
     | dist
     | typings
     | bentoml/grpc
-    | tests/e2e/bento_server_grpc
   )/
   | bentoml/_version.py
 )

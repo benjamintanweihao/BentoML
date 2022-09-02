@@ -250,19 +250,21 @@ class Image(IODescriptor[ImageType]):
                 headers={"content-disposition": content_disposition},
             )
 
-    async def from_proto(self, request: pb.Request) -> ImageType:
+    async def from_proto(
+        self, field: pb.File | bytes, *, _use_raw_bytes_contents: bool = False
+    ) -> ImageType:
         from bentoml.grpc.utils import filetype_pb_to_mimetype_map
 
         if self._mime_type.startswith("multipart"):
             raise UnprocessableEntity(
                 "'multipart' Content-Type is not yet supported for parsing files in gRPC. Use Multipart() instead."
-            )
+            ) from None
 
         mapping = filetype_pb_to_mimetype_map()
 
         # check if the request message has the correct field
-        if request.HasField("file"):
-            field = request.file
+        if not _use_raw_bytes_contents:
+            assert isinstance(field, pb.File)
             if field.kind:
                 try:
                     mime_type = mapping[field.kind]
@@ -275,12 +277,9 @@ class Image(IODescriptor[ImageType]):
                         f"{field.kind} is not a valid File kind. Accepted file kind: {set(mapping)}",
                     )
             content = field.content
-        elif request.HasField("raw_bytes_contents"):
-            content = request.raw_bytes_contents
         else:
-            raise InvalidArgument(
-                "Neither 'file' or 'raw_bytes_contents' field is found in the request message.",
-            )
+            assert isinstance(field, bytes)
+            content = field
 
         return PIL.Image.open(io.BytesIO(content))
 
@@ -290,7 +289,7 @@ class Image(IODescriptor[ImageType]):
         if self._mime_type.startswith("multipart"):
             raise UnprocessableEntity(
                 "'multipart' Content-Type is not yet supported for parsing files in gRPC. Use Multipart() instead."
-            )
+            ) from None
 
         if LazyType["ext.NpNDArray"]("numpy.ndarray").isinstance(obj):
             image = PIL.Image.fromarray(obj, mode=self._pilmode)
@@ -299,7 +298,7 @@ class Image(IODescriptor[ImageType]):
         else:
             raise InternalServerError(
                 f"Unsupported Image type received: '{type(obj)}', '{self.__class__.__name__}' only supports 'np.ndarray' and 'PIL.Image'.",
-            )
+            ) from None
         ret = io.BytesIO()
         image.save(ret, format=self._format)
 
@@ -308,6 +307,6 @@ class Image(IODescriptor[ImageType]):
         except KeyError:
             raise BadInput(
                 f"{self._mime_type} doesn't have a corresponding File 'kind'",
-            )
+            ) from None
 
         return pb.File(kind=kind, content=ret.getvalue())

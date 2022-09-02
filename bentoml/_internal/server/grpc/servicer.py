@@ -10,9 +10,11 @@ import grpc
 import anyio
 from grpc import aio
 
-from bentoml.exceptions import BentoMLException
-from bentoml.exceptions import UnprocessableEntity
 from bentoml.grpc.utils import grpc_status_code
+
+from ....exceptions import InvalidArgument
+from ....exceptions import BentoMLException
+from ....exceptions import UnprocessableEntity
 
 logger = logging.getLogger(__name__)
 
@@ -138,19 +140,29 @@ def create_bento_servicer(service: Service) -> services.BentoServiceServicer:
             if request.api_name not in service.apis:
                 raise UnprocessableEntity(
                     f"given 'api_name' is not defined in {service.name}",
-                )
+                ) from None
 
             api = service.apis[request.api_name]
             response = pb.Response()
 
             try:
-                input_ = await api.input.from_proto(request)
-
+                _use_raw_bytes_contents = False
+                if request.HasField(api.input.proto_field):
+                    io_proto = getattr(request, api.input.proto_field)
+                elif request.HasField("raw_bytes_contents"):
+                    io_proto = request.raw_bytes_contents
+                    _use_raw_bytes_contents = True
+                else:
+                    raise InvalidArgument(
+                        f"Neither '{api.input.proto_field}' or 'raw_bytes_contents' field is found in the request message.",
+                    ) from None
+                input_ = await api.input.from_proto(
+                    io_proto, _use_raw_bytes_contents=_use_raw_bytes_contents
+                )
                 if asyncio.iscoroutinefunction(api.func):
                     output = await api.func(input_)
                 else:
                     output = await anyio.to_thread.run_sync(api.func, input_)
-
                 protos = await api.output.to_proto(output)
                 response = pb.Response(**{api.output.proto_field: protos})
             except BentoMLException as e:
@@ -160,7 +172,7 @@ def create_bento_servicer(service: Service) -> services.BentoServiceServicer:
                 log_exception(request, sys.exc_info())
                 await context.abort(
                     code=grpc.StatusCode.INTERNAL,
-                    details="A runtime error has occurred, check out stacktrace from logs.",
+                    details="A runtime error has occurred, see stacktrace from logs.",
                 )
             except Exception:  # pylint: disable=broad-except
                 log_exception(request, sys.exc_info())

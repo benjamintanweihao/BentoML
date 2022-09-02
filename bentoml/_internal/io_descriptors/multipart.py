@@ -227,21 +227,21 @@ class Multipart(IODescriptor[t.Any]):
         }
         return await concat_to_multipart_response(res_mapping, ctx)
 
-    async def from_proto(self, request: pb.Request) -> dict[str, t.Any]:
-        if hasattr(request, "multipart"):
-            field = request.multipart
-            if len(set(field) - set(self._inputs)) != 0:
-                raise InvalidArgument(
-                    f"'{self.__class__.__name__}' only accepts '{set(self._inputs)}' as input fields. Invalid fields are: {set(field) - set(self._inputs)}",
-                ) from None
-        else:
+    async def from_proto(
+        self, field: MessageMap[str, pb.Part], *, _use_raw_bytes_contents: bool = False
+    ) -> dict[str, t.Any]:
+        if _use_raw_bytes_contents:
             raise InvalidArgument(
-                f"'multipart' is not found in the request message for {self.__class__.__name__}",
+                f"cannot use 'raw_bytes_contents' with {self.__class__.__name__}"
+            ) from None
+        if len(set(field) - set(self._inputs)) != 0:
+            raise InvalidArgument(
+                f"'{self.__class__.__name__}' only accepts '{set(self._inputs)}' as input fields. Invalid fields are: {set(field) - set(self._inputs)}",
             ) from None
 
         return {
             key: await self._inputs[key].from_proto(input_pb)
-            for key, input_pb in request.multipart.items()
+            for key, input_pb in field.items()
         }
 
     async def to_proto(self, obj: dict[str, t.Any]) -> MessageMap[str, pb.Part]:

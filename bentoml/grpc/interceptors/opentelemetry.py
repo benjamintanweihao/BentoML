@@ -21,7 +21,6 @@ from opentelemetry.semconv.trace import SpanAttributes
 from bentoml.grpc.utils import wrap_rpc_handler
 from bentoml.grpc.utils import GRPC_CONTENT_TYPE
 from bentoml.grpc.utils import parse_method_name
-
 from bentoml._internal.utils.pkg import get_pkg_version
 from bentoml._internal.configuration.containers import BentoMLContainer
 

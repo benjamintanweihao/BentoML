@@ -77,12 +77,14 @@ class GRPCAppFactory:
     def interceptors(self) -> Interceptors:
         # Note that order of interceptors is important here.
 
-        from bentoml.grpc.interceptors.opentelemetry import AsyncOpenTelemetryServerInterceptor
+        from bentoml.grpc.interceptors.opentelemetry import (
+            AsyncOpenTelemetryServerInterceptor,
+        )
 
         interceptors: Interceptors = [AsyncOpenTelemetryServerInterceptor]
 
         if self.enable_metrics:
-            from bentoml.grpc.interceptors import PrometheusServerInterceptor
+            from bentoml.grpc.interceptors.prometheus import PrometheusServerInterceptor
 
             interceptors.append(
                 partial(

@@ -33,20 +33,15 @@ if TYPE_CHECKING:
     import pydantic.schema as schema
     from google.protobuf import struct_pb2
 
-    from bentoml.grpc.v1alpha1 import service_pb2 as pb
-
     from .. import external_typing as ext
     from ..context import InferenceApiContext as Context
 
 else:
-    from bentoml.grpc.utils import import_generated_stubs
-
     _exc_msg = "'pydantic' must be installed to use 'pydantic_model'. Install with 'pip install pydantic'."
     pydantic = LazyLoader("pydantic", globals(), "pydantic", exc_msg=_exc_msg)
     schema = LazyLoader("schema", globals(), "pydantic.schema", exc_msg=_exc_msg)
 
     # lazy load our proto generated.
-    pb, _ = import_generated_stubs()
     struct_pb2 = LazyLoader("struct_pb2", globals(), "google.protobuf.struct_pb2")
 
     # lazy load numpy for processing ndarray.
@@ -294,21 +289,25 @@ class JSON(IODescriptor[JSONType]):
         else:
             return Response(json_str, media_type=self._mime_type)
 
-    async def from_proto(self, request: pb.Request) -> JSONType:
+    async def from_proto(
+        self, field: struct_pb2.Value | bytes, *, _use_raw_bytes_contents: bool = False
+    ) -> JSONType:
         from google.protobuf.json_format import MessageToDict
 
-        if request.HasField("json"):
-            json_obj = MessageToDict(request.json, preserving_proto_field_name=True)
+        if not _use_raw_bytes_contents:
+            assert isinstance(field, struct_pb2.Value)
+            parsed = MessageToDict(field, preserving_proto_field_name=True)
 
             if self._pydantic_model:
                 try:
-                    return self._pydantic_model.parse_obj(json_obj)
+                    return self._pydantic_model.parse_obj(parsed)
                 except pydantic.ValidationError as e:
                     raise UnprocessableEntity(
                         f"Invalid JSON input received: {e}"
                     ) from None
-        elif request.HasField("raw_bytes_contents"):
-            content = request.raw_bytes_contents
+        else:
+            assert isinstance(field, bytes)
+            content = field
             if self._pydantic_model:
                 try:
                     return self._pydantic_model.parse_raw(content)
@@ -318,15 +317,11 @@ class JSON(IODescriptor[JSONType]):
                     ) from None
 
             try:
-                json_obj = json.loads(content)
+                parsed = json.loads(content)
             except json.JSONDecodeError as e:
                 raise BadInput(f"Invalid JSON input received: {e}") from None
-        else:
-            raise BadInput(
-                "Neither 'json' nor 'raw_bytes_contents' is found in the request message",
-            ) from None
 
-        return json_obj
+        return parsed
 
     async def to_proto(self, obj: JSONType) -> struct_pb2.Value:
         if LazyType["pydantic.BaseModel"]("pydantic.BaseModel").isinstance(obj):

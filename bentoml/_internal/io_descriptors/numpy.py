@@ -295,14 +295,14 @@ class NumpyNdarray(IODescriptor["ext.NpNDArray"]):
             else:
                 msg = f'{self.__class__.__name__}: Expecting ndarray of dtype "{self._dtype}", but "{arr.dtype}" was received.'
                 if self._enforce_dtype:
-                    raise exception_cls(msg)
+                    raise exception_cls(msg) from None
                 else:
                     logger.debug(msg)
 
         if self._shape is not None and not _is_matched_shape(self._shape, arr.shape):
             msg = f'{self.__class__.__name__}: Expecting ndarray of shape "{self._shape}", but "{arr.shape}" was received.'
             if self._enforce_shape:
-                raise exception_cls(msg)
+                raise exception_cls(msg) from None
             try:
                 arr = arr.reshape(self._shape)
             except ValueError as e:
@@ -415,7 +415,9 @@ class NumpyNdarray(IODescriptor["ext.NpNDArray"]):
 
         return inst
 
-    async def from_proto(self, request: pb.Request) -> ext.NpNDArray:
+    async def from_proto(
+        self, field: pb.NDArray | bytes, *, _use_raw_bytes_contents: bool = False
+    ) -> ext.NpNDArray:
         """
         Process incoming protobuf request and convert it to ``numpy.ndarray``
 
@@ -427,51 +429,48 @@ class NumpyNdarray(IODescriptor["ext.NpNDArray"]):
             a ``numpy.ndarray`` object. This can then be used
              inside users defined logics.
         """
-        if request.HasField("ndarray"):
-            if request.ndarray.dtype == pb.NDArray.DTYPE_UNSPECIFIED:
+        if not _use_raw_bytes_contents:
+            assert isinstance(field, pb.NDArray)
+            if field.dtype == pb.NDArray.DTYPE_UNSPECIFIED:
                 dtype = None
             else:
                 try:
-                    dtype = dtypepb_to_npdtype_map()[request.ndarray.dtype]
+                    dtype = dtypepb_to_npdtype_map()[field.dtype]
                 except KeyError:
-                    raise BadInput(f"{request.ndarray.dtype} is invalid.")
+                    raise BadInput(f"{field.dtype} is invalid.") from None
 
             fieldpb = [
-                f.name
-                for f, _ in request.ndarray.ListFields()
-                if f.name.endswith("_values")
+                f.name for f, _ in field.ListFields() if f.name.endswith("_values")
             ]
 
             if len(fieldpb) == 0:
                 # input message doesn't have any fields.
-                return np.empty(shape=request.ndarray.shape or 0)
+                return np.empty(shape=field.shape or 0)
             elif len(fieldpb) > 1:
                 # when there are more than two values provided in the proto.
                 raise BadInput(
                     f"Array contents can only be one of given values key. Use one of '{fieldpb}' instead.",
-                )
+                ) from None
 
             dtype: ext.NpDTypeLike = fieldpb_to_npdtype_map()[fieldpb[0]]
 
-            values_array = getattr(request.ndarray, fieldpb[0])
+            values_array = getattr(field, fieldpb[0])
             try:
                 array = np.array(values_array, dtype=dtype)
             except ValueError:
                 array = np.array(values_array)
-        elif request.HasField("raw_bytes_contents"):
+
+            if field.shape:
+                array = np.reshape(array, field.shape)
+        else:
+            assert isinstance(field, bytes)
             if not self._dtype:
                 raise UnprocessableEntity(
                     "'raw_bytes_contents' requires specifying 'dtype'."
-                )
+                ) from None
 
             dtype: ext.NpDTypeLike = self._dtype
-            array = np.frombuffer(request.raw_bytes_contents, dtype=self._dtype)
-        else:
-            raise UnprocessableEntity(
-                "Neither 'array' or 'raw_bytes_contents' is found in the request message.",
-            )
-        if request.ndarray.shape:
-            array = np.reshape(array, request.ndarray.shape)
+            array = np.frombuffer(field, dtype=self._dtype)
 
         return self.validate_array(array)
 
@@ -488,8 +487,8 @@ class NumpyNdarray(IODescriptor["ext.NpNDArray"]):
         """
         try:
             obj = self.validate_array(obj, exception_cls=InternalServerError)
-        except InternalServerError:
-            raise
+        except InternalServerError as e:
+            raise e from None
 
         try:
             fieldpb = npdtype_to_fieldpb_map()[obj.dtype]
@@ -502,4 +501,4 @@ class NumpyNdarray(IODescriptor["ext.NpNDArray"]):
         except KeyError:
             raise BadInput(
                 f"Unsupported dtype '{obj.dtype}' for response message.",
-            )
+            ) from None

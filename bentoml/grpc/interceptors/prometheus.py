@@ -14,7 +14,6 @@ from simple_di import Provide
 
 from bentoml.grpc.utils import to_http_status
 from bentoml.grpc.utils import wrap_rpc_handler
-
 from bentoml._internal.configuration.containers import BentoMLContainer
 
 START_TIME_VAR: contextvars.ContextVar[float] = contextvars.ContextVar("START_TIME_VAR")
@@ -27,7 +26,6 @@ if TYPE_CHECKING:
     from bentoml.grpc.types import HandlerCallDetails
     from bentoml.grpc.types import BentoServicerContext
     from bentoml.grpc.v1alpha1 import service_pb2 as pb
-
     from bentoml._internal.service import Service
     from bentoml._internal.server.metrics.prometheus import PrometheusClient
 else:

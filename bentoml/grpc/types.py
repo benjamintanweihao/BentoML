@@ -87,6 +87,9 @@ if TYPE_CHECKING:
         Callable[[], aio.ServerInterceptor] | partial[aio.ServerInterceptor]
     ]
 
+    # types defined for client interceptors
+    BentoUnaryUnaryCall = aio.UnaryUnaryCall[Request, Response]
+
     __all__ = [
         "Request",
         "Response",
@@ -94,4 +97,5 @@ if TYPE_CHECKING:
         "BentoServiceServicer",
         "HandlerCallDetails",
         "RpcMethodHandler",
+        "BentoUnaryUnaryCall",
     ]
